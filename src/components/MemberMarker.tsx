@@ -74,11 +74,17 @@ function MemberMarkerInner({ member, mapHeading = 0, selected, hidden = false, o
               selected && styles.selected,
             ]}
           >
-            <Image
-              source={member.avatar}
-              fadeDuration={0}
-              style={[styles.photo, { transform: [{ rotate: `${-rot}deg` }] }]}
-            />
+            {member.avatar ? (
+              <Image
+                source={member.avatar}
+                fadeDuration={0}
+                style={[styles.photo, { transform: [{ rotate: `${-rot}deg` }] }]}
+              />
+            ) : (
+              <View style={[styles.initialWrap, { backgroundColor: `${member.color}40`, transform: [{ rotate: `${-rot}deg` }] }]}>
+                <Text style={styles.initial}>{member.name[0]?.toUpperCase()}</Text>
+              </View>
+            )}
           </View>
         </View>
         <View style={styles.tag}>
@@ -134,6 +140,8 @@ const styles = StyleSheet.create({
   idle: { borderTopLeftRadius: R },
   selected: { borderWidth: 3.5 },
   photo: { width: PHOTO, height: PHOTO },
+  initialWrap: { width: PHOTO, height: PHOTO, alignItems: 'center', justifyContent: 'center' },
+  initial: { color: UI.text, fontSize: 19, fontWeight: '800' },
   // Mini drop aligned with the big one: its rounded point clears the photo's
   // corner by ~7.5px; the side corners taper into the colored ring, and the
   // rest hides under the photo.

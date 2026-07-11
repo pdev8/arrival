@@ -35,7 +35,8 @@ const STRIDE_M = 0.75;
 export interface SimMember {
   id: string;
   name: string;
-  avatar: ImageSourcePropType;
+  /** bundled demo photo; live members have none until real profiles (A epic) */
+  avatar?: ImageSourcePropType;
   color: string;
   isYou: boolean;
   pos: LatLng;

@@ -25,17 +25,30 @@ export function ClusterMarker({ members, center, onPress }: Props) {
     <Marker coordinate={center} anchor={{ x: 0.5, y: 0.4 }} onPress={onPress} tracksViewChanges zIndex={15}>
       <View style={styles.wrap}>
         <View style={styles.pile}>
-          {shown.map((m, i) => (
-            <Image
-              key={m.id}
-              source={m.avatar}
-              fadeDuration={0}
-              style={[
-                styles.face,
-                { borderColor: m.color, marginLeft: i === 0 ? 0 : -14, zIndex: shown.length - i },
-              ]}
-            />
-          ))}
+          {shown.map((m, i) =>
+            m.avatar ? (
+              <Image
+                key={m.id}
+                source={m.avatar}
+                fadeDuration={0}
+                style={[
+                  styles.face,
+                  { borderColor: m.color, marginLeft: i === 0 ? 0 : -14, zIndex: shown.length - i },
+                ]}
+              />
+            ) : (
+              <View
+                key={m.id}
+                style={[
+                  styles.face,
+                  styles.faceInitial,
+                  { borderColor: m.color, marginLeft: i === 0 ? 0 : -14, zIndex: shown.length - i },
+                ]}
+              >
+                <Text style={styles.faceInitialText}>{m.name[0]?.toUpperCase()}</Text>
+              </View>
+            )
+          )}
           {extra > 0 && (
             <View style={[styles.face, styles.more]}>
               <Text style={styles.moreText}>+{extra}</Text>
@@ -75,6 +88,8 @@ const styles = StyleSheet.create({
     backgroundColor: UI.chip,
   },
   moreText: { color: UI.text, fontSize: 12, fontWeight: '700' },
+  faceInitial: { alignItems: 'center', justifyContent: 'center' },
+  faceInitialText: { color: UI.text, fontSize: 14, fontWeight: '800' },
   tag: {
     marginTop: 4,
     backgroundColor: UI.chip,
