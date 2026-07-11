@@ -5,6 +5,7 @@ import {
   Dimensions,
   Image,
   PanResponder,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +15,7 @@ import { FeedEvent, SimMember, Simulation } from '../demo/simulation';
 import { UI } from '../lib/colors';
 import { formatDistance, timeAgo } from '../lib/format';
 import { recapStats } from '../lib/recap';
+import { REACTION_EMOJIS, reactionsSig } from '../demo/reactions';
 import { RecapShare } from './RecapShareCard';
 import { Glass } from './Glass';
 import { StopCard } from './StopCard';
@@ -101,7 +103,7 @@ export function ActivityDock({ sim, sessionName, destinationName }: { sim: Simul
           <View style={styles.feedList}>
             <View style={styles.feedRail} />
             {sim.feed.map((e) => (
-              <FeedRow key={e.id} e={e} members={sim.members} elapsedSec={sim.elapsedSec} />
+              <FeedRow key={e.id} e={e} members={sim.members} elapsedSec={sim.elapsedSec} onReact={sim.react} />
             ))}
           </View>
           <View style={{ height: 28 }} />
@@ -151,28 +153,76 @@ function TickerDot({ memberId, members }: { memberId?: string; members: SimMembe
   return <Image source={member.avatar} fadeDuration={0} style={[styles.tickerAvatar, { borderColor: member.color }]} />;
 }
 
-/** Memoized on the row's visible output: the event is immutable, the member's
- *  avatar/color are stable per id, so only the "3m" bucket can change it. */
+/** Memoized on the row's visible output: text/member are immutable per id, so
+ *  only the "3m" bucket and the reactions signature can change it. Long-press
+ *  opens the reaction picker; onReact identity ignored (stable useCallback). */
 const FeedRow = React.memo(
-  function FeedRow({ e, members, elapsedSec }: { e: FeedEvent; members: SimMember[]; elapsedSec: number }) {
+  function FeedRow({
+    e,
+    members,
+    elapsedSec,
+    onReact,
+  }: {
+    e: FeedEvent;
+    members: SimMember[];
+    elapsedSec: number;
+    onReact: (eventId: string, emoji: string) => void;
+  }) {
+    const [picking, setPicking] = useState(false);
     const member = members.find((m) => m.id === e.memberId);
+    const reactions = Object.entries(e.reactions ?? {});
     return (
-      <View style={styles.feedRow}>
-        {member ? (
-          <Image source={member.avatar} fadeDuration={0} style={[styles.feedAvatar, { borderColor: member.color }]} />
-        ) : (
-          <View style={styles.feedSysDot}>
-            <MaterialCommunityIcons name="flag-outline" size={11} color={UI.textDim} />
+      <View>
+        <Pressable
+          style={styles.feedRow}
+          onLongPress={() => setPicking((v) => !v)}
+          delayLongPress={250}
+        >
+          {member ? (
+            <Image source={member.avatar} fadeDuration={0} style={[styles.feedAvatar, { borderColor: member.color }]} />
+          ) : (
+            <View style={styles.feedSysDot}>
+              <MaterialCommunityIcons name="flag-outline" size={11} color={UI.textDim} />
+            </View>
+          )}
+          <Text style={styles.feedText}>{e.text}</Text>
+          <Text style={styles.feedTime}>{timeAgo(elapsedSec - e.at)}</Text>
+        </Pressable>
+        {(picking || reactions.length > 0) && (
+          <View style={styles.reactRow}>
+            {reactions.map(([emoji, ids]) => (
+              <Pressable
+                key={emoji}
+                style={[styles.reactChip, ids.includes('you') && styles.reactChipMine]}
+                onPress={() => onReact(e.id, emoji)}
+              >
+                <Text style={styles.reactChipText}>
+                  {emoji} {ids.length}
+                </Text>
+              </Pressable>
+            ))}
+            {picking &&
+              REACTION_EMOJIS.filter((emoji) => !(e.reactions?.[emoji]?.length)).map((emoji) => (
+                <Pressable
+                  key={emoji}
+                  style={styles.reactPick}
+                  onPress={() => {
+                    onReact(e.id, emoji);
+                    setPicking(false);
+                  }}
+                >
+                  <Text style={styles.reactPickText}>{emoji}</Text>
+                </Pressable>
+              ))}
           </View>
         )}
-        <Text style={styles.feedText}>{e.text}</Text>
-        <Text style={styles.feedTime}>{timeAgo(elapsedSec - e.at)}</Text>
       </View>
     );
   },
   (prev, next) =>
     prev.e.id === next.e.id &&
-    timeAgo(prev.elapsedSec - prev.e.at) === timeAgo(next.elapsedSec - next.e.at)
+    timeAgo(prev.elapsedSec - prev.e.at) === timeAgo(next.elapsedSec - next.e.at) &&
+    reactionsSig(prev.e.reactions) === reactionsSig(next.e.reactions)
 );
 
 const styles = StyleSheet.create({
@@ -245,5 +295,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   feedText: { color: UI.text, fontSize: 13, flex: 1, lineHeight: 17 },
+  reactRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, paddingLeft: 32, paddingBottom: 6, marginTop: -2 },
+  reactChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 11,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  reactChipMine: { borderColor: UI.brand, backgroundColor: `${UI.brand}1F` },
+  reactChipText: { color: UI.text, fontSize: 11.5, fontWeight: '600' },
+  reactPick: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 11,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  reactPickText: { fontSize: 13 },
   feedTime: { color: UI.textDim, fontSize: 11, fontWeight: '600', marginLeft: 8, fontVariant: ['tabular-nums'] },
 });

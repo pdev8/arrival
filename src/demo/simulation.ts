@@ -10,6 +10,7 @@ import {
 } from '../lib/geo';
 import { CATEGORY_EMOJI, LevelSpan, MemberSeed, Scenario, StopCategory } from './data';
 import { Stoplight, findLights } from './lights';
+import { Reactions, toggleReaction } from './reactions';
 
 /** simulation tick interval — 4 Hz keeps marker motion fluid */
 const TICK_MS = 250;
@@ -79,6 +80,8 @@ export interface FeedEvent {
   at: number; // elapsed demo seconds
   memberId?: string;
   text: string;
+  /** emoji → member ids who reacted */
+  reactions?: Reactions;
 }
 
 interface InternalMember {
@@ -125,6 +128,8 @@ export interface Simulation {
   /** demo seconds since the session started — for relative feed timestamps */
   elapsedSec: number;
   vote: (stopId: string, up: boolean) => void;
+  /** toggle your emoji reaction on a feed event */
+  react: (eventId: string, emoji: string) => void;
   joinStop: (stopId: string) => void;
   announceStop: (pos: LatLng, category: StopCategory, note: string) => void;
   suggestStop: (pos: LatLng, category: StopCategory, note: string) => void;
@@ -215,6 +220,17 @@ export function useSimulation(running: boolean, scenario: Scenario): Simulation 
     [publish]
   );
 
+  const react = useCallback(
+    (eventId: string, emoji: string) => {
+      const s = sim.current!;
+      const e = s.feed.find((x) => x.id === eventId);
+      if (!e) return;
+      e.reactions = toggleReaction(e.reactions, emoji, 'you');
+      publish();
+    },
+    [publish]
+  );
+
   const joinStop = useCallback(
     (stopId: string) => {
       const s = sim.current!;
@@ -277,7 +293,7 @@ export function useSimulation(running: boolean, scenario: Scenario): Simulation 
     [publish]
   );
 
-  return { ...snapshot, vote, joinStop, announceStop, suggestStop };
+  return { ...snapshot, vote, react, joinStop, announceStop, suggestStop };
 }
 
 function pushFeed(s: SimState, memberId: string | undefined, text: string) {
@@ -398,8 +414,13 @@ function tick(s: SimState, dtSec: number) {
       m.arrived = true;
       m.progressM = m.totalM;
       m.statusNote = undefined;
+      const greeter = s.arrivalOrder[0];
       s.arrivalOrder.push(m.seed.id);
       pushFeed(s, m.seed.id, `${m.seed.name} arrived at ${scenario.destination.name}`);
+      // someone already there celebrates the arrival — feed feels alive
+      if (greeter && greeter !== m.seed.id) {
+        s.feed[0].reactions = { '🎉': [greeter] };
+      }
     }
   }
 }
