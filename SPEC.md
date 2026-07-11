@@ -1,8 +1,8 @@
 # Arrival — Road Trip Convoy Coordination
 
-**Version:** 0.1 (Draft)
+**Version:** 0.2 (Draft — updated alongside the M0 demo build; see §10 for demo implementation notes)
 **Date:** 2026-07-11
-**Platform:** iOS + Android via React Native / Expo
+**Platform:** iOS + Android via React Native / Expo (SDK 54)
 
 ---
 
@@ -41,16 +41,18 @@ Tracking is **position-based and session-scoped**: as long as you've joined an a
 |---|---------|-------------|
 | F1 | **Sessions** | Create/join/leave a session. Two kinds: **road trip** (has a destination set via place search) and **hangout** (no destination — just mutual tracking). Name, optional start time, members, and a **session length** (preset 2h/4h/8h/12h/24h or custom; road trips default to ETA + buffer). Sessions auto-complete at expiry — see §5.6. |
 | F1a | **Meet-style invite links** | Creating a session immediately mints a shareable link + short code (`arrival.app/j/kfx-mqvp-dhz`), Google Meet-style. The creator shares it via the OS share sheet; anyone opening it lands in the session (deep link if the app is installed, store + deferred deep link if not, so they still land in the right session after install). Link is live for the session's lifetime; the owner can regenerate (invalidating the old one) or lock the session once everyone's in. |
-| F2 | **Live member map** | Full-screen map showing each member's live position as a **color-coded avatar marker with a heading arrow** indicating direction of movement, plus movement state (driving 🚗 / walking 🚶 / stopped ⏸, derived from speed). Each member is assigned a distinct color on join, used consistently everywhere they appear (marker, feed, member list, stop cards). Auto-fit camera to show all members (+ destination if set); tap an avatar to focus/follow. |
+| F2 | **Live member map** | Full-screen map showing each member's live position as a **photo teardrop puck**: the profile photo fills a teardrop whose pointed corner leans into the direction of travel, with a small "pencil lead" in the member's color protruding past the point. Movement state is shown contextually (paused members get a ⏸ badge; idle pucks relax to a circle). **Your own puck carries a teardrop-shaped halo ring in your color** so you can always find yourself. Nearby members merge into a facepile cluster. Auto-fit camera to show all members (+ destination if set); tap an avatar to focus/follow. |
 | F3 | **ETA per member** | Road-trip sessions only: each member's ETA and distance to the destination, computed via a routing API, shown on their marker callout and in the member list. Hangout sessions instead show distance between members ("Jess · 0.4 mi away"). |
 | F4 | **Place selection** | Tap a POI on the map or long-press anywhere to select a location; search for places by name (autocomplete). Selection opens a place sheet with actions. |
 | F5 | **Suggestions** | From the place sheet: "Suggest this stop" with optional note and category (gas ⛽, food 🍔, restroom 🚻, scenic 📸, other 📍). Members vote 👍/👎. Suggestions appear as distinct pins + cards in the trip feed. |
 | F6 | **Stop announcements** | "I'm stopping here" — broadcasts a stop with category, optional note, and optional duration ("~15 min"). Member's marker switches to stopped state at that pin. Others can tap **"I'll stop too"** to join. Stops auto-clear when the member drives off or the timer lapses. |
-| F7 | **Trip feed / activity sheet** | Bottom sheet listing chronological trip events: joins, suggestions, votes, stops, "X is 10 min out" arrival alerts. This doubles as lightweight chat-free coordination. |
+| F7 | **Members, feed & coordination surfaces** | Three-layer bottom architecture: (1) a horizontal **member rail** — avatar chips ringed by **progress dots** (route completed) with live ETAs, everyone glanceable at once; (2) a focused **member card** when following someone — status with an **animated walking figure**, step count, "0.4 mi NE of you" relative bearing, and a one-tap **Retrace** that frames their whole trail; (3) a slim **activity dock** — collapsed it's a one-line live ticker of the latest event, expanded it's stops/suggestion cards plus an avatar-anchored **timeline**. When everyone arrives the dock leads with a **session recap** (group steps, your distance, first/last in). |
 | F8 | **Deep-link to nav** | Any pin (destination, stop, suggestion) has "Navigate" → opens Google Maps / Waze / Apple Maps with that lat/lng. |
 | F9 | **Arrival detection** | Geofence around destination and confirmed stops; when a member enters, the feed posts "Sarah arrived at Lake Tahoe 🎉" and their status updates. |
 | F10 | **Auth & profiles** | Lightweight auth (Apple / Google sign-in + email fallback). Profile = display name, avatar (photo or color/emoji). |
 | F11 | **Position-based, session-scoped tracking** | Sharing runs while (and only while) the user has **joined an active session** with sharing on — no nav-app detection needed, identical behavior on iOS and Android. The tracker is adaptive (§5.4): it samples position and derives movement state (driving/walking/stopped) from speed, dialing frequency up when moving and down to low-power mode when stationary. Tracking ends immediately on leaving the session, toggling sharing off, or session completion. |
+| F12 | **Trails (retrace your steps)** | Each member's traveled path renders in their color: walkers leave **footprints** (single shoe prints alternating left/right, rotated to walking direction), drivers a fading line. Opacity ramps up as the path stretches farther from its start. A **Trails** map toggle shows everyone's; selecting a member always shows theirs. Use case: retracing steps to find something lost. Session-scoped like positions — trails die with the session. |
+| F13 | **Step counts** | For members on foot, steps are derived from distance walked (~0.75 m stride). Your live count sits in the session header; every walker's count shows in their member row. Drivers show the join code / no steps. |
 
 ### 3.2 Explicitly out of scope for v1
 - Turn-by-turn navigation or route rendering of *other members'* planned routes (we show positions + ETAs, not their route lines).
@@ -225,11 +227,18 @@ The location watcher below runs **only while the user is in an active session wi
 - **Long-idle nudge**: stationary > 60 min triggers a local "Still out with the group?" notification with one-tap *keep sharing* / *stop sharing* — a privacy backstop against forgotten sessions, not an auto-disarm (in city mode, sitting still for an hour is normal).
 - Members whose updates go stale (backgrounded + OS throttled, dead zone) stay on the map at last-known position with a "last seen Xm ago" badge — never silently dropped.
 
-### 5.4a Member colors
+### 5.4a Member colors & marker design
 
 - Each member is assigned a color from a curated 12-color palette on join (first unused). The session cap is also 12 (F1a), so **every member is guaranteed a unique color** — no collisions possible. Stored as `trip_members.color` so every client renders identically.
-- Colors must be distinguishable from one another and legible on both light/dark map styles; the avatar marker is a colored ring around the profile photo/emoji with a matching heading arrow, so color-blind users still have the photo as the primary identifier.
-- The member's color threads through the whole UI: map marker, feed entries, stop cards, member list — one glance ties "the orange dot" to "orange Jess suggested In-N-Out."
+- Colors must be distinguishable from one another and legible on both light/dark map styles; color-blind users still have the photo as the primary identifier.
+- The member's color threads through the whole UI: map marker, feed entries, stop cards, member list, trail — one glance ties "the orange trail" to "orange Jess suggested In-N-Out."
+
+**Marker anatomy (as built in the demo):**
+- **Moving:** the profile photo fills a teardrop (three corners at full radius, tip corner tightened) that rotates so the point leads in the direction of travel; the photo counter-rotates to stay upright. A small rounded **pencil-lead tip** in the member's color protrudes ~7px past the point — the color leads the photo without tinting it. A thin ring in the member's color outlines the shape.
+- **Idle/arrived:** the teardrop relaxes to a plain circle.
+- **Paused:** the pause state lives *inside the timer* — a small ❚❚ glyph next to the frozen countdown in the marker's name tag and the rail chip. No badges or rings on the puck itself.
+- **You:** rendered identically to everyone else (the "You" name tag and the rail identify you); the earlier halo ring was retired as visual noise.
+- **Clusters:** members within ~6% of the visible map merge into a facepile marker (up to 4 photos + "+N"). Individual markers stay mounted and go transparent underneath (remounting flashes photos); a selected member always stays individually visible.
 
 ### 5.5 Realtime channel events (per trip)
 
@@ -316,3 +325,43 @@ arrival/
 | D3 | Backend | Supabase vs. Firebase vs. custom (Node + Postgres) | Supabase (SQL + RLS + realtime in one; PostGIS available) |
 | D4 | Position transport | Realtime broadcast (ephemeral) vs. DB writes per ping | Broadcast + periodic snapshot (as specced) |
 | D5 | ETA computation | Server-side per member (consistent, costs API calls) vs. client-side straight-line fallback | Server-side w/ adaptive interval; straight-line fallback offline |
+
+## 10. M0 Demo Implementation Notes (as built)
+
+The current build is a self-contained demo: no backend, no auth — a simulation drives a full session so the product can be felt end to end. Everything below is real product UI running against simulated members.
+
+### 10.1 Scenarios & simulation
+- Two scenarios: **NYC walking hangout** (7 friends converging on Washington Square Park, real time) and **Tahoe road trip** (4 cars on US-50/I-80, 25× time scale).
+- **Routes are real street geometry** fetched from OSRM (OpenStreetMap foot/car profiles), Douglas-Peucker-simplified, and baked into `src/demo/routes.ts` — walkers follow sidewalks and cross at corners (no jaywalking, no cutting through buildings); drivers hug the actual highway corridors. Regenerate with `scripts/fetch-routes.mjs`. No corner-smoothing is applied (Chaikin corner-cutting used to slice through corner buildings).
+- **Stoplights:** walkers pause at plausible lights — every sharp turn (a real corner) plus periodic mid-block crossings, deduped to one per block; a per-member seeded hash decides which lights catch them red (~55%) and for how long (4–13s). Waiting doesn't change state (no pause badge / feed noise) — the person just stands at the corner.
+- Scripted beats: a friend announces a coffee/gas stop on reaching a POI; another suggests a food stop that an ally upvotes to confirmation. POIs must sit within 300 m of a member's route to trigger the pull-over.
+- Simulation ticks at 4 Hz; ETAs are live countdowns and lengthen while someone is stopped.
+- Demo avatars are **bundled local assets** (`assets/avatars/`) — remote avatars flashed empty whenever a marker remounted.
+
+### 10.2 Trails & steps (F12/F13 as built)
+- The sim exposes each member's traveled path (`trail`); trails render as **dotted native polylines** in the member's color (`TrailPath`) — drawn by the map's *overlay* renderer, never as markers. This is a hard rule: trail markers (both footprint glyphs and plain dots) aggravated react-native-maps **#5911** (Apple Maps + New Architecture natively drops custom marker views during zoom/pan reconciliation), which is what made profile pucks flaky when Trails was toggled while zooming.
+- Apple Maps dash patterns are screen-point based and zoom-compensated by MapKit, so **dot size/spacing stay constant at every zoom for free** — the hand-rolled zoom-adaptive thinning is gone.
+- **Opacity ramp:** each trail is drawn as 3 distance-equal segments at alphas 0.30 → 0.55 → 0.85 (faint start, solid head). Never combine `strokeColors` gradients with dashes: the gradient renderer breaks dash zoom-scaling and doubles stroke width. Segments rebuild only every ~20 m of new travel; every polyline keeps ≥3 points (2-point polylines silently don't render on Apple Maps, #5285).
+- Walkers get a dot pattern (`[0.1, 11]`, round cap, 5pt); drivers a dash (`[8, 6]`, 3.5pt).
+- (Footprint prints remain a design candidate — if revived, they must be pre-rendered image assets, never live glyph markers.)
+- Steps = distance walked ÷ 0.75 m. Header shows yours; member card shows everyone's.
+
+### 10.3 Glass design system
+- `Glass` component: `expo-blur` BlurView, tint **`systemUltraThinMaterialDark`** (the plain `dark` tint is ~80% smoke and made panels read opaque no matter the fill), hairline `rgba(255,255,255,0.16)` stroke, fill `rgba(13,15,20,0.18)`; the activity dock runs even lighter (`0.16` fill). Blur intensities ~32–56 by surface.
+- **Two accents, deliberately separated**: the 12-color member palette identifies *people*; a warm amber **brand accent** (`UI.brand`) carries *session-level* signals (brand mark, convergence status, arrival recap) so group info never reads as one member. Cobalt stays member[0]/"you".
+- **Live map as ambient canvas**: home and create sit on a real, non-interactive, slowly drifting map under a scrim (`AmbientMap`) — the glass blurs actual city, not a flat color.
+- Dark editorial look: near-black `#0B0D12` base, white primary buttons.
+
+### 10.3a Session screen information architecture (v2 redesign)
+- **Header**: session name + one **group convergence line** — "All in ~14 min · Noah last" (amber once everyone's here) — plus your live steps and time remaining. The join code lives in the share sheet, not the header.
+- **Member rail** (always visible above the dock): horizontal chips, each avatar wrapped in a **DotRing** — progress dots that fill clockwise as that member covers their route (green when arrived), ETA beneath, pause dot for stopped members.
+- **Member card** (replaces the rail while following someone): identity, live status + steps, distance + 8-wind compass direction relative to you, big ETA, **Retrace steps** (fits the camera to their whole trail without fighting follow mode) and Close.
+- **Activity dock**: two detents. Collapsed = grab handle + live ticker of the newest event. Expanded = arrival recap (when complete), stop/suggestion cards, avatar timeline.
+- Camera modes: auto-fit everyone ⇄ follow selected ⇄ free (pan keeps the card open but releases the camera).
+
+### 10.4 Map & performance notes
+- **Marker stability doctrine** (from the flaky-avatar investigation): the app runs the default Apple Maps provider, where (a) `tracksViewChanges` is a silent no-op (iOS-Google-only prop), (b) there is no annotation-view reuse — every custom marker is a live view hierarchy, and (c) open bug #5911 (Apple Maps + New Architecture) can drop custom marker children during zoom/pan reconciliation. Consequences: keep the marker population small and stable (only members, clusters, stops, destination — trails are overlays), never mass-mount/unmount markers in one commit, and `newArchEnabled: false` in app.json for dev builds (Expo Go can't opt out; a dev build is the reliable path).
+- All member markers stay **mounted for the whole session**; cluster membership toggles `opacity` instead of unmounting (remounts = photo flash). Cluster facepiles render on top.
+- **Cluster regrouping is throttled** (~2.5 s, or a >25% zoom-threshold change): recomputing membership at the 4 Hz tick made groupings flap when spacing hovered near the threshold, remounting facepile photos continuously. Between regroups, cluster centers still track live positions every tick.
+- Walking-state rows animate a built-from-views **walking figure** (legs scissoring at the hip, arms counter-swinging at the shoulder, far limbs dimmed, native-driver loop) rather than a static glyph.
+- Camera: auto-fit everyone (refits every 4th tick), tap-to-follow at fixed zoom, `Everyone` recenter + `Trails` toggle stacked above the sheet.

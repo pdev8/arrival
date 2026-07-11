@@ -4,19 +4,26 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityDock, DOCK_PEEK } from '../src/components/ActivityDock';
 import { ClusterMarker } from '../src/components/ClusterMarker';
 import { Glass } from '../src/components/Glass';
+import { MemberCard } from '../src/components/MemberCard';
 import { MemberMarker } from '../src/components/MemberMarker';
-import { SessionSheet } from '../src/components/SessionSheet';
+import { MemberRail } from '../src/components/MemberRail';
 import { StopPin } from '../src/components/StopPin';
+import { TrailPath } from '../src/components/TrailPath';
 import { SCENARIOS } from '../src/demo/data';
 import { SimMember, StopCategory, useSimulation } from '../src/demo/simulation';
 import { UI } from '../src/lib/colors';
 import { CATEGORY_ICON } from '../src/lib/icons';
 import { LatLng, distanceM } from '../src/lib/geo';
 
-const FIT_PADDING = { top: 130, right: 60, bottom: 340, left: 60 };
+const FIT_PADDING = { top: 130, right: 60, bottom: 320, left: 60 };
+const TRAIL_PADDING = { top: 150, right: 70, bottom: 340, left: 70 };
 const CATEGORIES: StopCategory[] = ['coffee', 'food', 'gas', 'restroom', 'scenic', 'other'];
+/** cluster regrouping cadence — membership flapping at 4 Hz remounted photo
+ *  facepiles constantly; splits/merges every couple of seconds read fine */
+const CLUSTER_REGROUP_MS = 2500;
 
 export default function SessionScreen() {
   const router = useRouter();
@@ -30,32 +37,26 @@ export default function SessionScreen() {
   const mapRef = useRef<MapView>(null);
   const [autoFit, setAutoFit] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** camera-follow the selected member; off while retracing/panning so the
+      card can stay open without the camera snapping back every tick */
+  const [follow, setFollow] = useState(false);
+  const [showTrails, setShowTrails] = useState(false);
   const [placePick, setPlacePick] = useState<LatLng | null>(null);
   const [mapHeading, setMapHeading] = useState(0);
   const [region, setRegion] = useState<Region>(scenario.initialRegion as Region);
   const fitCounter = useRef(0);
   const endsAt = useRef(Date.now() + durationMin * 60_000);
-  const sharedOnce = useRef(false);
 
   const inviteMessage = `Join my Arrival session “${sessionName}”: https://arrival.app/j/${joinCode}`;
 
-  // Meet-style moment: surface the invite link right after the session is created.
-  useEffect(() => {
-    if (sharedOnce.current) return;
-    sharedOnce.current = true;
-    const t = setTimeout(() => Share.share({ message: inviteMessage }).catch(() => {}), 800);
-    return () => clearTimeout(t);
-  }, [inviteMessage]);
-
-  // Camera: follow the selected member, otherwise auto-fit the whole crew (§4 top-down view).
+  // Camera: follow the selected member, otherwise auto-fit the whole crew.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const selected = sim.members.find((m) => m.id === selectedId);
-    if (selected) {
-      // instant lock onto the member — no eased pan
-      map.setCamera({ center: selected.pos, zoom: scenario.key === 'walk' ? 15.5 : 11 });
-    } else if (autoFit) {
+    if (selected && follow) {
+      map.setCamera({ center: selected.pos, zoom: scenario.key === 'walk' ? 16.5 : 11 });
+    } else if (!selectedId && autoFit) {
       if (fitCounter.current++ % 4 === 0) {
         map.fitToCoordinates(
           [...sim.members.map((m) => m.pos), scenario.destination.pos],
@@ -63,9 +64,9 @@ export default function SessionScreen() {
         );
       }
     }
-  }, [sim.members, selectedId, autoFit]);
+  }, [sim.members, selectedId, autoFit, follow]);
 
-  // Track map rotation (arrow compensation) and region (cluster threshold).
+  // Track map rotation (arrow compensation) and region (cluster threshold, trail density).
   const onRegionSettled = (r: Region) => {
     setRegion(r);
     mapRef.current
@@ -75,33 +76,84 @@ export default function SessionScreen() {
   };
 
   // Members within ~6% of the visible map merge into a facepile cluster.
+  // Membership is throttled: recomputing it at the 4 Hz tick made groupings
+  // flap whenever spacing hovered near the threshold, remounting facepile
+  // photos over and over (a churn source behind the flaky-avatar bug).
+  // Between regroups only the centers track live positions.
+  const clusterMemo = useRef({ ids: [] as string[][], at: 0, thresholdM: 0 });
   const clusters = useMemo(() => {
     const thresholdM = region.latitudeDelta * 111_000 * 0.06;
-    const groups: { members: SimMember[]; center: LatLng }[] = [];
-    for (const m of sim.members) {
-      const g = groups.find((x) => distanceM(x.center, m.pos) < thresholdM);
-      if (g) {
-        g.members.push(m);
-        const n = g.members.length;
-        g.center = {
-          latitude: g.members.reduce((s, x) => s + x.pos.latitude, 0) / n,
-          longitude: g.members.reduce((s, x) => s + x.pos.longitude, 0) / n,
-        };
-      } else {
-        groups.push({ members: [m], center: m.pos });
+    const now = Date.now();
+    const memo = clusterMemo.current;
+    const thresholdMoved = Math.abs(thresholdM - memo.thresholdM) > memo.thresholdM * 0.25;
+    if (now - memo.at > CLUSTER_REGROUP_MS || thresholdMoved) {
+      const groups: { members: SimMember[]; center: LatLng }[] = [];
+      for (const m of sim.members) {
+        const g = groups.find((x) => distanceM(x.center, m.pos) < thresholdM);
+        if (g) {
+          g.members.push(m);
+          const n = g.members.length;
+          g.center = {
+            latitude: g.members.reduce((s, x) => s + x.pos.latitude, 0) / n,
+            longitude: g.members.reduce((s, x) => s + x.pos.longitude, 0) / n,
+          };
+        } else {
+          groups.push({ members: [m], center: m.pos });
+        }
       }
+      memo.ids = groups.map((g) => g.members.map((m) => m.id));
+      memo.at = now;
+      memo.thresholdM = thresholdM;
     }
-    return groups;
+    // rebuild the memoized grouping with this tick's live positions
+    const byId = new Map(sim.members.map((m) => [m.id, m]));
+    return memo.ids
+      .map((ids) => ids.map((id) => byId.get(id)).filter((m): m is SimMember => !!m))
+      .filter((g) => g.length > 0)
+      .map((g) => ({
+        members: g,
+        center: {
+          latitude: g.reduce((s, x) => s + x.pos.latitude, 0) / g.length,
+          longitude: g.reduce((s, x) => s + x.pos.longitude, 0) / g.length,
+        },
+      }));
   }, [sim.members, region]);
+
+  // members currently riding in a multi-member cluster
+  const clusteredIds = useMemo(
+    () =>
+      new Set(
+        clusters.filter((c) => c.members.length > 1).flatMap((c) => c.members.map((m) => m.id))
+      ),
+    [clusters]
+  );
 
   const remaining = Math.max(0, endsAt.current - Date.now());
   const remH = Math.floor(remaining / 3_600_000);
   const remM = Math.floor((remaining % 3_600_000) / 60_000);
+  const you = sim.members.find((m) => m.isYou);
+  const selected = sim.members.find((m) => m.id === selectedId);
 
-  const memberColor = useMemo(
-    () => (id: string) => sim.members.find((m) => m.id === id)?.color ?? UI.accent,
-    [sim.members]
-  );
+  // Group convergence: the one line that answers "when are we all together?"
+  const enRoute = sim.members.filter((m) => m.state !== 'arrived');
+  const straggler = enRoute.length
+    ? enRoute.reduce((a, b) => (a.etaMin > b.etaMin ? a : b))
+    : null;
+  const convergence = straggler
+    ? `All in ~${Math.max(1, Math.ceil(straggler.etaMin))} min · ${straggler.name} last`
+    : 'Everyone’s here';
+  const headerSub =
+    convergence +
+    (you && you.mode === 'foot' && you.steps > 0 ? ` · ${you.steps.toLocaleString()} steps` : '') +
+    ` · ends ${remH > 0 ? `${remH}h ` : ''}${remM}m`;
+
+  const retrace = (m: SimMember) => {
+    if (m.trail.length > 1) {
+      setFollow(false);
+      setAutoFit(false);
+      mapRef.current?.fitToCoordinates(m.trail, { edgePadding: TRAIL_PADDING, animated: true });
+    }
+  };
 
   return (
     <View style={styles.screen}>
@@ -117,10 +169,20 @@ export default function SessionScreen() {
         onRegionChangeComplete={onRegionSettled}
         onPanDrag={() => {
           setAutoFit(false);
-          setSelectedId(null);
+          setFollow(false); // keep the card open — just stop steering the camera
         }}
         onLongPress={(e) => setPlacePick(e.nativeEvent.coordinate)}
       >
+        {/* trails: the path each member traveled, in their color — all when
+            toggled, always for the selected member (retrace-your-steps).
+            Rendered as dotted native polylines (overlays), never markers —
+            trail markers destabilized the profile pucks (see TrailPath). */}
+        {sim.members
+          .filter((m) => (showTrails || m.id === selectedId) && m.trail.length > 1)
+          .map((m) => (
+            <TrailPath key={`trail-${m.id}`} member={m} />
+          ))}
+
         <Marker coordinate={scenario.destination.pos} anchor={{ x: 0.5, y: 0.5 }} zIndex={8}>
           <View style={styles.destWrap}>
             <View style={styles.destPin}>
@@ -133,22 +195,34 @@ export default function SessionScreen() {
         </Marker>
 
         {sim.stops.map((s) => (
-          <StopPin key={s.id} stop={s} memberColor={memberColor(s.createdBy)} onPress={() => {}} />
+          <StopPin
+            key={s.id}
+            stop={s}
+            memberColor={sim.members.find((m) => m.id === s.createdBy)?.color ?? UI.accent}
+            onPress={() => {}}
+          />
         ))}
 
-        {clusters.map((c) =>
-          c.members.length === 1 ? (
-            <MemberMarker
-              key={c.members[0].id}
-              member={c.members[0]}
-              mapHeading={mapHeading}
-              selected={c.members[0].id === selectedId}
-              onPress={() => {
-                setSelectedId((cur) => (cur === c.members[0].id ? null : c.members[0].id));
-                setAutoFit(false);
-              }}
-            />
-          ) : (
+        {/* every member marker stays mounted for the whole session — markers
+            riding in a cluster go transparent instead of unmounting, so their
+            photos never remount (remounts were the avatar flash on zoom) */}
+        {sim.members.map((m) => (
+          <MemberMarker
+            key={m.id}
+            member={m}
+            mapHeading={mapHeading}
+            selected={m.id === selectedId}
+            hidden={clusteredIds.has(m.id) && m.id !== selectedId}
+            onPress={() => {
+              setSelectedId((cur) => (cur === m.id ? null : m.id));
+              setFollow(true);
+              setAutoFit(false);
+            }}
+          />
+        ))}
+        {clusters
+          .filter((c) => c.members.length > 1)
+          .map((c) => (
             <ClusterMarker
               key={c.members.map((m) => m.id).join('-')}
               members={c.members}
@@ -166,20 +240,19 @@ export default function SessionScreen() {
                 );
               }}
             />
-          )
-        )}
+          ))}
       </MapView>
 
       {/* header */}
       <SafeAreaView style={styles.header} pointerEvents="box-none">
-        <Glass style={styles.headerBar} radius={18} intensity={55}>
+        <Glass style={styles.headerBar} radius={18} intensity={44}>
           <Pressable onPress={() => router.replace('/')} hitSlop={12}>
-            <Text style={styles.headerBack}>‹</Text>
+            <MaterialCommunityIcons name="chevron-left" size={26} color={UI.text} />
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle} numberOfLines={1}>{sessionName}</Text>
-            <Text style={styles.headerSub}>
-              Ends in {remH > 0 ? `${remH}h ` : ''}{remM}m · {joinCode}
+            <Text style={[styles.headerSub, sim.allArrived && { color: UI.brand }]} numberOfLines={1}>
+              {headerSub}
             </Text>
           </View>
           <Pressable style={styles.inviteBtn} onPress={() => Share.share({ message: inviteMessage }).catch(() => {})}>
@@ -189,31 +262,53 @@ export default function SessionScreen() {
         </Glass>
       </SafeAreaView>
 
-      {/* recenter */}
-      {(!autoFit || selectedId) && (
-        <Pressable
-          style={styles.recenterWrap}
-          onPress={() => {
-            setSelectedId(null);
-            setAutoFit(true);
-            fitCounter.current = 0;
-          }}
-        >
-          <Glass style={styles.recenter} radius={20} intensity={55}>
-            <MaterialCommunityIcons name="arrow-collapse-all" size={14} color={UI.text} />
-            <Text style={styles.recenterText}>Everyone</Text>
+      {/* map controls */}
+      <View style={styles.fabCol} pointerEvents="box-none">
+        <Pressable onPress={() => setShowTrails((v) => !v)}>
+          <Glass style={[styles.fab, showTrails && styles.fabOn]} radius={20} intensity={44}>
+            <MaterialCommunityIcons name="map-marker-path" size={14} color={showTrails ? UI.bg : UI.text} />
+            <Text style={[styles.fabText, showTrails && styles.fabTextOn]}>Trails</Text>
           </Glass>
         </Pressable>
-      )}
+        {(!autoFit || selectedId) && (
+          <Pressable
+            onPress={() => {
+              setSelectedId(null);
+              setAutoFit(true);
+              fitCounter.current = 0;
+            }}
+          >
+            <Glass style={styles.fab} radius={20} intensity={44}>
+              <MaterialCommunityIcons name="arrow-collapse-all" size={14} color={UI.text} />
+              <Text style={styles.fabText}>Everyone</Text>
+            </Glass>
+          </Pressable>
+        )}
+      </View>
 
-      <SessionSheet
-        sim={sim}
-        selectedId={selectedId}
-        onSelectMember={(id) => {
-          setSelectedId((cur) => (cur === id ? null : id));
-          setAutoFit(false);
-        }}
-      />
+      {/* member surface: rail of everyone, or the focused member's card */}
+      <View style={styles.memberArea} pointerEvents="box-none">
+        {selected ? (
+          <MemberCard
+            member={selected}
+            you={you}
+            onRetrace={() => retrace(selected)}
+            onClose={() => setSelectedId(null)}
+          />
+        ) : (
+          <MemberRail
+            members={sim.members}
+            selectedId={selectedId}
+            onSelect={(id) => {
+              setSelectedId((cur) => (cur === id ? null : id));
+              setFollow(true);
+              setAutoFit(false);
+            }}
+          />
+        )}
+      </View>
+
+      <ActivityDock sim={sim} />
 
       <PlaceSheet
         pos={placePick}
@@ -256,7 +351,7 @@ function PlaceSheet({
     <Modal visible={pos !== null} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.modalBackdrop} onPress={onClose} />
       <View style={styles.placeWrap}>
-        <Glass style={styles.placeSheet} radius={26} intensity={70}>
+        <Glass style={styles.placeSheet} radius={26} intensity={56}>
           <Text style={styles.placeTitle}>Dropped pin</Text>
           <Text style={styles.placeSub}>
             {pos ? `${pos.latitude.toFixed(4)}, ${pos.longitude.toFixed(4)}` : ''}
@@ -303,13 +398,12 @@ const styles = StyleSheet.create({
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     marginHorizontal: 12,
     marginTop: 6,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  headerBack: { color: UI.text, fontSize: 28, fontWeight: '600', marginTop: -3 },
   headerTitle: { color: UI.text, fontSize: 16, fontWeight: '800' },
   headerSub: { color: UI.textDim, fontSize: 12, marginTop: 1 },
   inviteBtn: {
@@ -322,9 +416,18 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   inviteBtnText: { color: UI.bg, fontSize: 13, fontWeight: '700' },
-  recenterWrap: { position: 'absolute', right: 14, bottom: 300 },
-  recenter: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 13, paddingVertical: 9 },
-  recenterText: { color: UI.text, fontSize: 13, fontWeight: '600' },
+  fabCol: {
+    position: 'absolute',
+    right: 14,
+    bottom: DOCK_PEEK + 130,
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  fab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 13, paddingVertical: 9 },
+  fabOn: { backgroundColor: 'rgba(255,255,255,0.92)' },
+  fabText: { color: UI.text, fontSize: 13, fontWeight: '600' },
+  fabTextOn: { color: UI.bg },
+  memberArea: { position: 'absolute', left: 0, right: 0, bottom: DOCK_PEEK + 20 },
   destWrap: { alignItems: 'center' },
   destPin: {
     width: 32,

@@ -28,7 +28,8 @@ export function ClusterMarker({ members, center, onPress }: Props) {
           {shown.map((m, i) => (
             <Image
               key={m.id}
-              source={{ uri: m.avatarUrl }}
+              source={m.avatar}
+              fadeDuration={0}
               style={[
                 styles.face,
                 { borderColor: m.color, marginLeft: i === 0 ? 0 : -14, zIndex: shown.length - i },

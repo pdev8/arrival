@@ -1,0 +1,168 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SimMember } from '../demo/simulation';
+import { UI } from '../lib/colors';
+import { bearingDeg, compassDir, distanceM, formatDistance, formatEtaClock } from '../lib/geo';
+import { STATE_ICON } from '../lib/icons';
+import { DotRing } from './DotRing';
+import { Glass } from './Glass';
+
+interface Props {
+  member: SimMember;
+  /** you, for the "0.4 mi NE of you" line (undefined when member IS you) */
+  you?: SimMember;
+  onRetrace: () => void;
+  onClose: () => void;
+}
+
+/**
+ * Focused view of one member, shown in place of the rail while following
+ * them: identity + live status, where they are relative to YOU (distance +
+ * compass direction — the "which way do I look" answer a map alone doesn't
+ * give), and Retrace, which frames their whole trail on the map.
+ */
+export function MemberCard({ member, you, onRetrace, onClose }: Props) {
+  const arrived = member.state === 'arrived';
+  let status =
+    member.state === 'arrived'
+      ? 'Arrived'
+      : member.state === 'stopped'
+        ? (member.statusNote ?? 'Stopped')
+        : `${formatDistance(member.remainingM)} out`;
+  if (member.mode === 'foot' && member.steps > 0) status += ` · ${member.steps.toLocaleString()} steps`;
+
+  const relative =
+    you && you.id !== member.id
+      ? `${formatDistance(distanceM(you.pos, member.pos))} ${compassDir(bearingDeg(you.pos, member.pos))} of you`
+      : null;
+
+  return (
+    <Glass style={styles.card} radius={20} intensity={44}>
+      <View style={styles.topRow}>
+        <View style={styles.avatarWrap}>
+          <Image source={member.avatar} fadeDuration={0} style={styles.avatar} />
+          <DotRing size={56} progress={member.progress} color={arrived ? UI.success : member.color} count={16} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.name}>{member.name}</Text>
+          <View style={styles.statusRow}>
+            {member.state === 'walking' ? (
+              <WalkingIcon />
+            ) : (
+              <MaterialCommunityIcons name={STATE_ICON[member.state]} size={12} color={UI.textDim} />
+            )}
+            <Text style={styles.status} numberOfLines={1}>
+              {status}
+            </Text>
+          </View>
+          {relative && (
+            <Text style={[styles.relative, { color: member.color }]}>{relative}</Text>
+          )}
+        </View>
+        <View style={styles.etaCol}>
+          <Text style={[styles.eta, { color: arrived ? UI.success : member.color }]}>
+            {arrived ? 'here' : formatEtaClock(member.etaMin)}
+          </Text>
+          {!arrived && <Text style={styles.etaLabel}>eta</Text>}
+        </View>
+      </View>
+      <View style={styles.actions}>
+        <Pressable style={styles.actionPrimary} onPress={onRetrace}>
+          <MaterialCommunityIcons name="map-marker-path" size={14} color={UI.bg} />
+          <Text style={styles.actionPrimaryText}>Retrace steps</Text>
+        </Pressable>
+        <Pressable style={styles.actionGhost} onPress={onClose}>
+          <Text style={styles.actionGhostText}>Close</Text>
+        </Pressable>
+      </View>
+    </Glass>
+  );
+}
+
+/**
+ * A tiny person walking in profile: legs scissor from the hip, arms swing
+ * opposite from the shoulder, far-side limbs dimmed, slight forward lean and
+ * a bob per stride. Limb wrappers are twice the limb's length with the limb
+ * in the bottom half, so rotating the wrapper pivots the limb at its joint.
+ */
+export function WalkingIcon() {
+  const t = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(t, { toValue: 1, duration: 360, useNativeDriver: true }),
+        Animated.timing(t, { toValue: 0, duration: 360, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [t]);
+  const swing = (from: string, to: string) =>
+    t.interpolate({ inputRange: [0, 1], outputRange: [from, to] });
+  const bob = t.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -0.8, 0] });
+  return (
+    <Animated.View style={[walker.figure, { transform: [{ translateY: bob }, { rotate: '6deg' }] }]}>
+      <Animated.View style={[walker.armPivot, walker.far, { transform: [{ rotate: swing('30deg', '-30deg') }] }]}>
+        <View style={walker.arm} />
+      </Animated.View>
+      <Animated.View style={[walker.legPivot, walker.far, { transform: [{ rotate: swing('-26deg', '26deg') }] }]}>
+        <View style={walker.leg} />
+      </Animated.View>
+      <View style={walker.head} />
+      <View style={walker.torso} />
+      <Animated.View style={[walker.legPivot, { transform: [{ rotate: swing('26deg', '-26deg') }] }]}>
+        <View style={walker.leg} />
+      </Animated.View>
+      <Animated.View style={[walker.armPivot, { transform: [{ rotate: swing('-30deg', '30deg') }] }]}>
+        <View style={walker.arm} />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+const walker = StyleSheet.create({
+  figure: { width: 11, height: 15, alignItems: 'center' },
+  head: { width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: UI.textDim },
+  torso: { width: 2, height: 4.5, borderRadius: 1, backgroundColor: UI.textDim, marginTop: 0.5 },
+  far: { opacity: 0.5 },
+  armPivot: { position: 'absolute', left: 4.75, top: 0, width: 1.5, height: 9 },
+  arm: { position: 'absolute', top: 4.5, width: 1.5, height: 4.5, borderRadius: 1, backgroundColor: UI.textDim },
+  legPivot: { position: 'absolute', left: 4.5, top: 2.5, width: 2, height: 12 },
+  leg: { position: 'absolute', top: 6, width: 2, height: 6, borderRadius: 1, backgroundColor: UI.textDim },
+});
+
+const styles = StyleSheet.create({
+  card: { marginHorizontal: 12, padding: 12 },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatarWrap: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#14161C' },
+  name: { color: UI.text, fontSize: 16, fontWeight: '800' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  status: { color: UI.textDim, fontSize: 12.5, flexShrink: 1 },
+  relative: { fontSize: 12.5, fontWeight: '700', marginTop: 2 },
+  etaCol: { alignItems: 'flex-end' },
+  eta: { fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  etaLabel: { color: UI.textDim, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
+  actions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  actionPrimary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 10,
+  },
+  actionPrimaryText: { color: UI.bg, fontSize: 13.5, fontWeight: '700' },
+  actionGhost: {
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionGhostText: { color: UI.text, fontSize: 13.5, fontWeight: '600' },
+});
