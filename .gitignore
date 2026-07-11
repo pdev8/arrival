@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# local env files (Supabase keys live here, never in git)
+.env
