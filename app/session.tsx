@@ -17,6 +17,7 @@ import { SimMember, StopCategory, useSimulation } from '../src/demo/simulation';
 import { UI } from '../src/lib/colors';
 import { CATEGORY_ICON } from '../src/lib/icons';
 import { LatLng, distanceM } from '../src/lib/geo';
+import { navigateTo } from '../src/lib/nav-deeplinks';
 
 const FIT_PADDING = { top: 130, right: 60, bottom: 320, left: 60 };
 const TRAIL_PADDING = { top: 150, right: 70, bottom: 340, left: 70 };
@@ -183,13 +184,25 @@ export default function SessionScreen() {
             <TrailPath key={`trail-${m.id}`} member={m} />
           ))}
 
-        <Marker coordinate={scenario.destination.pos} anchor={{ x: 0.5, y: 0.5 }} zIndex={8}>
+        <Marker
+          coordinate={scenario.destination.pos}
+          anchor={{ x: 0.5, y: 0.5 }}
+          zIndex={8}
+          onPress={() =>
+            navigateTo(
+              scenario.destination.pos,
+              scenario.destination.name,
+              scenario.key === 'roadtrip' ? 'drive' : 'walk'
+            )
+          }
+        >
           <View style={styles.destWrap}>
             <View style={styles.destPin}>
               <MaterialCommunityIcons name="flag-checkered" size={15} color={UI.text} />
             </View>
             <View style={styles.destTag}>
               <Text style={styles.destLabel}>{scenario.destination.name}</Text>
+              <Text style={styles.destNav}>navigate ›</Text>
             </View>
           </View>
         </Marker>
@@ -454,6 +467,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2.5,
   },
   destLabel: { color: UI.text, fontSize: 10.5, fontWeight: '700' },
+  destNav: { color: UI.textDim, fontSize: 9.5, fontWeight: '600', marginTop: 0.5 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
   placeWrap: { paddingHorizontal: 10, paddingBottom: 12 },
   placeSheet: { padding: 18, paddingBottom: 26 },

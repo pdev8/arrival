@@ -15,6 +15,7 @@ import { FeedEvent, SessionStop, SimMember, Simulation } from '../demo/simulatio
 import { UI } from '../lib/colors';
 import { formatDistance } from '../lib/geo';
 import { CATEGORY_ICON } from '../lib/icons';
+import { navigateTo } from '../lib/nav-deeplinks';
 import { Glass } from './Glass';
 
 const SCREEN_H = Dimensions.get('window').height;
@@ -179,6 +180,16 @@ function StopCard({ stop, sim }: { stop: SessionStop; sim: Simulation }) {
           <Text style={styles.stopMeta}>Your stop</Text>
         )}
         {stop.participants.length > 1 && <Text style={styles.stopMeta}>{stop.participants.length} stopping</Text>}
+        <View style={{ marginLeft: 'auto' }}>
+          <Pill
+            icon="navigation-variant-outline"
+            label="Navigate"
+            active={false}
+            onPress={() =>
+              navigateTo(stop.pos, stop.name, sim.members.find((m) => m.isYou)?.mode === 'car' ? 'drive' : 'walk')
+            }
+          />
+        </View>
       </View>
     </View>
   );
