@@ -83,6 +83,16 @@ record; this is what you must not regress.
 - Camera state machine: auto-fit ⇄ follow(selected) ⇄ free. Retrace and pan
   must clear `follow` or the per-tick `setCamera` fights the user.
 
+## Tests (non-negotiable going forward)
+
+- `npm test` (jest-expo). Every PR that adds or changes logic ships tests.
+- Keep logic PURE and out of components so it's testable without rendering:
+  geometry in `lib/geo`, display strings in `lib/format`, trail segmentation
+  in `lib/trail`, clustering math in `lib/clusters` (throttling lives in
+  `hooks/useClusters`), convergence line in `lib/convergence`, stoplights in
+  `demo/lights`, `levelAt` exported from `demo/simulation`.
+- If you find yourself writing logic inline in a component, extract it first.
+
 ## Simulation
 
 - Routes are real OSRM street geometry (see the `regen-routes` skill). No

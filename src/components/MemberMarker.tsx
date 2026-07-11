@@ -4,7 +4,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { formatEtaClock } from '../lib/geo';
+import { formatEtaClock, formatLevel } from '../lib/format';
 
 interface Props {
   member: SimMember;
@@ -61,6 +61,10 @@ export function MemberMarker({ member, mapHeading = 0, selected, hidden = false,
         </View>
         <View style={styles.tag}>
           <Text style={styles.tagName}>{member.name}</Text>
+          {/* off street level: B1 / F2 chip so verticality reads on the map */}
+          {member.level != null && (
+            <Text style={styles.tagLevel}>{formatLevel(member.level)}</Text>
+          )}
           {/* paused reads inside the timer itself: ❚❚ next to the frozen clock */}
           {member.state === 'stopped' && (
             <MaterialCommunityIcons name="pause" size={10} color={member.color} />
@@ -135,5 +139,15 @@ const styles = StyleSheet.create({
     paddingVertical: 2.5,
   },
   tagName: { color: UI.text, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.1 },
+  tagLevel: {
+    color: UI.text,
+    fontSize: 9,
+    fontWeight: '800',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
   tagEta: { fontSize: 10.5, fontWeight: '700', fontVariant: ['tabular-nums'] },
 });
