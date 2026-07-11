@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ImageSourcePropType } from 'react-native';
 import {
   LatLng,
-  chaikinSmooth,
+  bearingDeg,
   cumulativeDistances,
   distanceM,
   headingAlongRoute,
   pointAlongRoute,
+  routeSlice,
 } from '../lib/geo';
 import { CATEGORY_EMOJI, MemberSeed, Scenario, StopCategory } from './data';
 
@@ -20,10 +22,20 @@ export type MemberState = 'driving' | 'walking' | 'stopped' | 'arrived';
 /** speeds above this read as driving; below, walking */
 const DRIVING_MPS = 3;
 
+/** average stride length used to derive step counts from distance walked */
+const STRIDE_M = 0.75;
+
+/* Stoplights: walkers pause briefly at some corners and crossings. */
+const LIGHT_MIN_WAIT_S = 4;
+const LIGHT_WAIT_SPAN_S = 9; // waits land in 4–13s
+const LIGHT_EVERY_M = 220; // candidate mid-block crossings between corners
+const LIGHT_MIN_GAP_M = 90; // at most one light per block
+const LIGHT_RED_PCT = 55; // odds a given light catches you
+
 export interface SimMember {
   id: string;
   name: string;
-  avatarUrl: string;
+  avatar: ImageSourcePropType;
   color: string;
   isYou: boolean;
   pos: LatLng;
@@ -32,6 +44,16 @@ export interface SimMember {
   /** real-time minutes to destination */
   etaMin: number;
   remainingM: number;
+  /** foot vs car — decides whether a step count is meaningful */
+  mode: 'foot' | 'car';
+  /** steps taken this session (0 for drivers) */
+  steps: number;
+  /** fraction of their route completed, 0..1 — drives the progress rings */
+  progress: number;
+  /** distance covered this session, meters */
+  traveledM: number;
+  /** the path traveled this session, for breadcrumb trails */
+  trail: LatLng[];
   statusNote?: string;
 }
 
@@ -61,8 +83,14 @@ interface InternalMember {
   route: LatLng[]; // corner-smoothed
   cum: number[];
   totalM: number;
+  /** where on the route this member started the session */
+  startM: number;
   progressM: number;
   stopUntil: number | null;
+  /** brief stoplight wait — pauses movement without changing state */
+  waitUntil: number | null;
+  lights: { atM: number; waitSec: number }[];
+  nextLight: number;
   arrived: boolean;
   joinedScriptedStop: boolean;
   statusNote?: string;
@@ -78,6 +106,8 @@ interface SimState {
   scriptedStopPosted: boolean;
   scriptedSuggestPosted: boolean;
   allyVoted: boolean;
+  /** member ids in the order they arrived — powers the recap */
+  arrivalOrder: string[];
   /** distance of the scripted stop POI along a given member's route (or null if off-route) */
   stopPoiAtM: Map<string, number | null>;
 }
@@ -87,6 +117,10 @@ export interface Simulation {
   stops: SessionStop[];
   feed: FeedEvent[];
   allArrived: boolean;
+  /** member ids in arrival order (first → last so far) */
+  arrivalOrder: string[];
+  /** demo seconds since the session started — for relative feed timestamps */
+  elapsedSec: number;
   vote: (stopId: string, up: boolean) => void;
   joinStop: (stopId: string) => void;
   announceStop: (pos: LatLng, category: StopCategory, note: string) => void;
@@ -105,17 +139,25 @@ export function useSimulation(running: boolean, scenario: Scenario): Simulation 
     const members = new Map<string, InternalMember>();
     const stopPoiAtM = new Map<string, number | null>();
     for (const seed of scenario.members) {
-      // round every corner so turns are curves, not snaps (§ walking realism)
-      const route = chaikinSmooth(scenario.routes[seed.routeKey], 3);
+      // routes are real street geometry (see routes.ts) — no corner smoothing,
+      // which used to cut diagonally through corner buildings
+      const route = scenario.routes[seed.routeKey];
       const cum = cumulativeDistances(route);
       const totalM = cum[cum.length - 1];
+      const startM = totalM * seed.startFrac;
+      const lights = seed.cruiseMps < DRIVING_MPS ? findLights(route, cum, seed.id) : [];
+      const firstLight = lights.findIndex((l) => l.atM > startM);
       members.set(seed.id, {
         seed,
         route,
         cum,
         totalM,
-        progressM: totalM * seed.startFrac,
+        startM,
+        progressM: startM,
         stopUntil: null,
+        waitUntil: null,
+        lights,
+        nextLight: firstLight === -1 ? lights.length : firstLight,
         arrived: false,
         joinedScriptedStop: false,
       });
@@ -131,6 +173,7 @@ export function useSimulation(running: boolean, scenario: Scenario): Simulation 
       scriptedStopPosted: false,
       scriptedSuggestPosted: false,
       allyVoted: false,
+      arrivalOrder: [],
       stopPoiAtM,
     };
     pushFeed(sim.current, undefined, `Session started — ${scenario.members.length} members sharing`);
@@ -314,6 +357,19 @@ function tick(s: SimState, dtSec: number) {
       m.statusNote = `stopped at ${stopEvent.poi.name}`;
     }
 
+    // stoplights: a short curb wait at some corners and crossings — the
+    // person just stands at the light, so no state change and no feed noise
+    if (m.waitUntil !== null && s.elapsed >= m.waitUntil) m.waitUntil = null;
+    if (
+      m.waitUntil === null &&
+      m.stopUntil === null &&
+      m.nextLight < m.lights.length &&
+      m.progressM >= m.lights[m.nextLight].atM
+    ) {
+      m.waitUntil = s.elapsed + m.lights[m.nextLight].waitSec;
+      m.nextLight++;
+    }
+
     // resume
     if (m.stopUntil !== null && s.elapsed >= m.stopUntil) {
       m.stopUntil = null;
@@ -326,7 +382,7 @@ function tick(s: SimState, dtSec: number) {
     }
 
     // advance
-    if (m.stopUntil === null) {
+    if (m.stopUntil === null && m.waitUntil === null) {
       m.progressM = Math.min(m.progressM + m.seed.cruiseMps * dtSec * scenario.timeScale, m.totalM);
     }
 
@@ -335,6 +391,7 @@ function tick(s: SimState, dtSec: number) {
       m.arrived = true;
       m.progressM = m.totalM;
       m.statusNote = undefined;
+      s.arrivalOrder.push(m.seed.id);
       pushFeed(s, m.seed.id, `${m.seed.name} arrived at ${scenario.destination.name}`);
     }
   }
@@ -342,6 +399,44 @@ function tick(s: SimState, dtSec: number) {
 
 function memberName(s: SimState, id: string): string {
   return s.members.get(id)?.seed.name ?? id;
+}
+
+/**
+ * Plausible stoplight positions along a walking route: every sharp turn (a
+ * real street corner) plus periodic candidates for straight-through
+ * crossings, deduped to one per block. A seeded hash decides which lights
+ * catch this walker red and for how long, so the pattern is stable across
+ * re-renders but differs per member.
+ */
+function findLights(route: LatLng[], cum: number[], seedId: string): { atM: number; waitSec: number }[] {
+  const total = cum[cum.length - 1];
+  const seedH = seedId.split('').reduce((h, c) => h * 31 + c.charCodeAt(0), 7);
+  const hash = (n: number) => {
+    let h = (n * 2654435761 + seedH * 97) >>> 0;
+    h ^= h >> 13;
+    return h % 100;
+  };
+
+  const candidates: number[] = [];
+  for (let i = 1; i < route.length - 1; i++) {
+    const turn = Math.abs(
+      ((bearingDeg(route[i], route[i + 1]) - bearingDeg(route[i - 1], route[i]) + 540) % 360) - 180
+    );
+    if (turn > 35) candidates.push(cum[i]);
+  }
+  for (let m = LIGHT_EVERY_M; m < total; m += LIGHT_EVERY_M) candidates.push(m);
+  candidates.sort((a, b) => a - b);
+
+  const lights: { atM: number; waitSec: number }[] = [];
+  for (const atM of candidates) {
+    if (atM < 40 || atM > total - 80) continue; // not right at the start or the arrival
+    if (lights.length && atM - lights[lights.length - 1].atM < LIGHT_MIN_GAP_M) continue;
+    const h = hash(Math.round(atM));
+    if (h < LIGHT_RED_PCT) {
+      lights.push({ atM, waitSec: LIGHT_MIN_WAIT_S + (h % LIGHT_WAIT_SPAN_S) });
+    }
+  }
+  return lights;
 }
 
 /** Distance along a route of its closest waypoint to a POI, or null if the POI isn't on this route. */
@@ -358,7 +453,14 @@ function distanceAlongRoute(route: LatLng[], cum: number[], poi: LatLng): number
   return bestD <= ON_ROUTE_TOLERANCE_M ? best : null;
 }
 
-function buildSnapshot(s: SimState): { members: SimMember[]; stops: SessionStop[]; feed: FeedEvent[]; allArrived: boolean } {
+function buildSnapshot(s: SimState): {
+  members: SimMember[];
+  stops: SessionStop[];
+  feed: FeedEvent[];
+  allArrived: boolean;
+  arrivalOrder: string[];
+  elapsedSec: number;
+} {
   const members: SimMember[] = [];
   for (const m of s.members.values()) {
     const { pos } = pointAlongRoute(m.route, m.cum, m.progressM);
@@ -366,7 +468,8 @@ function buildSnapshot(s: SimState): { members: SimMember[]; stops: SessionStop[
     const lookM = Math.max(8, m.seed.cruiseMps * 6);
     const heading = headingAlongRoute(m.route, m.cum, m.progressM, lookM);
     const remainingM = Math.max(0, m.totalM - m.progressM);
-    const moving: MemberState = m.seed.cruiseMps >= DRIVING_MPS ? 'driving' : 'walking';
+    const mode: 'foot' | 'car' = m.seed.cruiseMps >= DRIVING_MPS ? 'car' : 'foot';
+    const moving: MemberState = mode === 'car' ? 'driving' : 'walking';
     // a stop pushes the ETA out by the time left standing still (in real terms),
     // so the clock jumps up when someone stops, then resumes counting down
     const stopDelayMin =
@@ -374,7 +477,7 @@ function buildSnapshot(s: SimState): { members: SimMember[]; stops: SessionStop[
     members.push({
       id: m.seed.id,
       name: m.seed.name,
-      avatarUrl: m.seed.avatarUrl,
+      avatar: m.seed.avatar,
       color: m.seed.color,
       isYou: m.seed.isYou,
       pos,
@@ -382,6 +485,11 @@ function buildSnapshot(s: SimState): { members: SimMember[]; stops: SessionStop[
       state: m.arrived ? 'arrived' : m.stopUntil !== null ? 'stopped' : moving,
       etaMin: remainingM / m.seed.cruiseMps / 60 + stopDelayMin,
       remainingM,
+      mode,
+      steps: mode === 'foot' ? Math.round((m.progressM - m.startM) / STRIDE_M) : 0,
+      progress: m.totalM > 0 ? m.progressM / m.totalM : 1,
+      traveledM: m.progressM - m.startM,
+      trail: routeSlice(m.route, m.cum, m.startM, m.progressM),
       statusNote: m.statusNote,
     });
   }
@@ -390,5 +498,7 @@ function buildSnapshot(s: SimState): { members: SimMember[]; stops: SessionStop[
     stops: [...s.stops],
     feed: [...s.feed],
     allArrived: members.every((m) => m.state === 'arrived'),
+    arrivalOrder: [...s.arrivalOrder],
+    elapsedSec: s.elapsed,
   };
 }

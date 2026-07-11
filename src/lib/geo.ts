@@ -78,6 +78,22 @@ export function chaikinSmooth(route: LatLng[], iterations = 2): LatLng[] {
 }
 
 /**
+ * The stretch of a route between `fromM` and `toM` meters: every waypoint in
+ * between, with exact interpolated endpoints. Used for breadcrumb trails.
+ */
+export function routeSlice(route: LatLng[], cum: number[], fromM: number, toM: number): LatLng[] {
+  const total = cum[cum.length - 1];
+  const a = Math.max(0, Math.min(fromM, total));
+  const b = Math.max(a, Math.min(toM, total));
+  const pts: LatLng[] = [pointAlongRoute(route, cum, a).pos];
+  for (let i = 0; i < route.length; i++) {
+    if (cum[i] > a && cum[i] < b) pts.push(route[i]);
+  }
+  pts.push(pointAlongRoute(route, cum, b).pos);
+  return pts;
+}
+
+/**
  * Heading via central difference: bearing from a point slightly behind to a
  * point slightly ahead, so the arrow sweeps smoothly through turns instead
  * of snapping segment to segment.
@@ -87,6 +103,12 @@ export function headingAlongRoute(route: LatLng[], cum: number[], atM: number, l
   const behind = pointAlongRoute(route, cum, Math.max(0, atM - lookM)).pos;
   const ahead = pointAlongRoute(route, cum, Math.min(total, atM + lookM)).pos;
   return bearingDeg(behind, ahead);
+}
+
+/** Bearing → 8-wind compass direction ("NE"), for "0.4 mi NE of you" lines. */
+export function compassDir(bearing: number): string {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return dirs[Math.round((((bearing % 360) + 360) % 360) / 45) % 8];
 }
 
 /** ETA as a live countdown clock: m:ss, or h:mm:ss beyond an hour. */

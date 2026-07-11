@@ -25,9 +25,15 @@ export const UI = {
   border: 'rgba(255,255,255,0.09)',
   text: '#F5F6F8',
   textDim: '#8A94A6',
+  /** member-ish cobalt — kept for member[0]/"you" contexts */
   accent: '#5B8DEF',
+  /** session/brand accent — deliberately NOT a member color, so group-level
+   *  signals (brand mark, convergence, recap) never read as one person */
+  brand: '#E8A852',
   danger: '#D95757',
   success: '#4CAF83',
+  /** dim track for progress rings/dots */
+  track: 'rgba(255,255,255,0.16)',
   /** solid near-black for on-map chips where blur isn't available */
   chip: 'rgba(13,15,21,0.88)',
 } as const;
