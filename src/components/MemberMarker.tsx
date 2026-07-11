@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   },
   tag: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: 5,
     marginTop: 4,
     backgroundColor: UI.chip,
