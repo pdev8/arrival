@@ -150,6 +150,13 @@ function Stat({ label, value }: { label: string; value: string }) {
 function TickerDot({ memberId, members }: { memberId?: string; members: SimMember[] }) {
   const member = members.find((m) => m.id === memberId);
   if (!member) return <View style={[styles.tickerFallback]} />;
+  if (!member.avatar) {
+    return (
+      <View style={[styles.tickerAvatar, { borderColor: member.color, alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={styles.initialTiny}>{member.name[0]?.toUpperCase()}</Text>
+      </View>
+    );
+  }
   return <Image source={member.avatar} fadeDuration={0} style={[styles.tickerAvatar, { borderColor: member.color }]} />;
 }
 
@@ -316,4 +323,5 @@ const styles = StyleSheet.create({
   },
   reactPickText: { fontSize: 13 },
   feedTime: { color: UI.textDim, fontSize: 11, fontWeight: '600', marginLeft: 8, fontVariant: ['tabular-nums'] },
+  initialTiny: { color: UI.text, fontSize: 10, fontWeight: '800' },
 });

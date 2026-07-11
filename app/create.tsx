@@ -47,6 +47,7 @@ export default function CreateSession() {
   const start = async () => {
     const trimmed = name.trim() || 'Untitled session';
     let code = makeJoinCode();
+    let tripId: string | undefined;
     if (supabaseConfigured) {
       setCreating(true);
       try {
@@ -58,6 +59,7 @@ export default function CreateSession() {
           destination: SCENARIOS[kind].destination.pos,
         });
         code = trip.joinCode;
+        tripId = trip.id;
       } catch (e) {
         surfaceError('Live session unavailable — demo mode', e);
       } finally {
@@ -66,7 +68,13 @@ export default function CreateSession() {
     }
     router.replace({
       pathname: '/session',
-      params: { name: trimmed, kind, durationMin: String(durationMin), code },
+      params: {
+        name: trimmed,
+        kind,
+        durationMin: String(durationMin),
+        code,
+        ...(tripId ? { live: '1', tripId } : {}),
+      },
     });
   };
 

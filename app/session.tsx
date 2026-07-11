@@ -16,6 +16,8 @@ import { TrailPath } from '../src/components/TrailPath';
 import { useClusters } from '../src/hooks/useClusters';
 import { SCENARIOS } from '../src/demo/data';
 import { SimMember, useSimulation } from '../src/demo/simulation';
+import { useLiveTrip } from '../src/live/useLiveTrip';
+import { supabaseConfigured } from '../src/lib/supabase';
 import { saveArchive } from '../src/lib/archive';
 import { surfaceError } from '../src/lib/errors';
 import { UI } from '../src/lib/colors';
@@ -30,14 +32,18 @@ const FOLLOW_ZOOM: Record<string, number> = { walk: 16.5, roadtrip: 11, mall: 18
 
 export default function SessionScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ name?: string; kind?: string; durationMin?: string; code?: string }>();
+  const params = useLocalSearchParams<{ name?: string; kind?: string; durationMin?: string; code?: string; live?: string; tripId?: string }>();
   const sessionName = params.name ?? 'Session';
   const joinCode = params.code ?? 'kfx-mqvp-dhz';
   const durationMin = Number(params.durationMin ?? 240);
   const scenario =
     SCENARIOS[params.kind === 'roadtrip' ? 'roadtrip' : params.kind === 'mall' ? 'mall' : 'walk'];
 
-  const sim = useSimulation(true, scenario);
+  // live when created/joined against the backend; demo simulation otherwise
+  const isLive = params.live === '1' && supabaseConfigured && !!params.tripId;
+  const demoSim = useSimulation(!isLive, scenario);
+  const liveSim = useLiveTrip(isLive, params.tripId, scenario.destination, 'Paul');
+  const sim = isLive && liveSim ? liveSim : demoSim;
   const mapRef = useRef<MapView>(null);
   const [autoFit, setAutoFit] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -122,7 +128,7 @@ export default function SessionScreen() {
   const selected = sim.members.find((m) => m.id === selectedId);
 
   const headerSub =
-    summarizeConvergence(sim.members) +
+    (sim.members.length === 0 ? 'Waiting for members…' : summarizeConvergence(sim.members)) +
     (you && you.mode === 'foot' && you.steps > 0 ? ` · ${you.steps.toLocaleString()} steps` : '') +
     ` · ends ${remH > 0 ? `${remH}h ` : ''}${remM}m`;
 

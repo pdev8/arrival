@@ -44,6 +44,7 @@ export function MemberCard({ member, you, onRetrace, onClose }: Props) {
       <View style={styles.topRow}>
         <AvatarRing
           source={member.avatar}
+          name={member.name}
           size={56}
           avatarSize={42}
           progress={member.progress}

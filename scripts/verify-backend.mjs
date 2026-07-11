@@ -75,6 +75,26 @@ check('non-member sees no roster (RLS)', !spyM.error && spyM.data?.length === 0)
 const bad = await mallory.rpc('join_trip', { p_code: 'zzz-zzz-zzz' });
 check('bogus code rejected', !!bad.error);
 
+// 7. realtime: bob broadcasts on the private trip channel, alice receives
+const received = new Promise((resolve) => {
+  const ch = alice.channel(`trip:${trip.id}`, { config: { private: true, broadcast: { self: false } } });
+  ch.on('broadcast', { event: 'pos' }, ({ payload }) => resolve(payload)).subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      const chB = bob.channel(`trip:${trip.id}`, { config: { private: true } });
+      chB.subscribe(async (s) => {
+        if (s === 'SUBSCRIBED') {
+          await chB.send({ type: 'broadcast', event: 'pos', payload: { id: bobId, lat: 40.7501, lng: -74.0002 } });
+        }
+      });
+    }
+  });
+  setTimeout(() => resolve(null), 8000);
+});
+const pos2 = await received;
+check('realtime broadcast on private channel', !!pos2, pos2 ? `lat=${pos2.lat}` : 'timed out');
+await alice.removeAllChannels();
+await bob.removeAllChannels();
+
 function report() {
   const fails = results.filter(([ok]) => !ok).length;
   console.log(fails === 0 ? '\nAll checks passed — backend is live.' : `\n${fails} check(s) failed.`);

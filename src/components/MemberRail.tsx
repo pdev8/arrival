@@ -48,6 +48,7 @@ const RailChip = React.memo(
         <Glass style={[styles.chip, selected && styles.chipSelected]} radius={16} intensity={36}>
           <AvatarRing
             source={m.avatar}
+            name={m.name}
             size={48}
             avatarSize={36}
             progress={m.progress}

@@ -143,6 +143,8 @@ export default function Home() {
                       kind: trip.kind,
                       code: trip.joinCode,
                       durationMin: String(Math.max(1, Math.round((trip.endsAt - Date.now()) / 60000))),
+                      live: '1',
+                      tripId: trip.id,
                     },
                   });
                 } catch (e) {
