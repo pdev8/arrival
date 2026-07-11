@@ -10,6 +10,8 @@ import { DEMO_AVATARS } from '../../src/demo/data';
 import { ArchivedSession, getArchive } from '../../src/lib/archive';
 import { UI } from '../../src/lib/colors';
 import { formatDistance } from '../../src/lib/format';
+import { recapStats } from '../../src/lib/recap';
+import { RecapShare } from '../../src/components/RecapShareCard';
 import { TRAIL_ALPHAS, alphaHex, buildSegments } from '../../src/lib/trail';
 
 const FIT_PADDING = { top: 140, right: 60, bottom: 180, left: 60 };
@@ -146,6 +148,20 @@ export default function ArchiveView() {
           {you && <Stat label="you covered" value={formatDistance(you.traveledM)} />}
           {first && <Stat label="first in" value={first.name} />}
           <Stat label="duration" value={`${Math.max(1, Math.round(session.durationSec / 60))} min`} />
+          <RecapShare
+            sessionName={session.name}
+            destinationName={session.destination.name}
+            endedAt={session.endedAt}
+            durationSec={session.durationSec}
+            members={session.members.map((m) => ({
+              id: m.id,
+              name: m.name,
+              color: m.color,
+              avatar: DEMO_AVATARS[m.avatarKey],
+              steps: m.steps,
+            }))}
+            stats={recapStats(session.members, session.arrivalOrder)}
+          />
         </Glass>
       </View>
     </View>
