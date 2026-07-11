@@ -23,7 +23,7 @@ import { LatLng } from '../src/lib/geo';
 const FIT_PADDING = { top: 130, right: 60, bottom: 320, left: 60 };
 const TRAIL_PADDING = { top: 150, right: 70, bottom: 340, left: 70 };
 /** follow-mode zoom per scenario kind */
-const FOLLOW_ZOOM: Record<string, number> = { walk: 16.5, roadtrip: 11 };
+const FOLLOW_ZOOM: Record<string, number> = { walk: 16.5, roadtrip: 11, mall: 18 };
 
 export default function SessionScreen() {
   const router = useRouter();
@@ -31,7 +31,8 @@ export default function SessionScreen() {
   const sessionName = params.name ?? 'Session';
   const joinCode = params.code ?? 'kfx-mqvp-dhz';
   const durationMin = Number(params.durationMin ?? 240);
-  const scenario = SCENARIOS[params.kind === 'roadtrip' ? 'roadtrip' : 'walk'];
+  const scenario =
+    SCENARIOS[params.kind === 'roadtrip' ? 'roadtrip' : params.kind === 'mall' ? 'mall' : 'walk'];
 
   const sim = useSimulation(true, scenario);
   const mapRef = useRef<MapView>(null);

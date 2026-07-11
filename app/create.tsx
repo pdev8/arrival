@@ -23,18 +23,18 @@ function makeJoinCode(): string {
   return `${group()}-${group()}-${group()}`;
 }
 
-const DEFAULT_NAMES = { hangout: 'Saturday in the Village', roadtrip: 'Lake Tahoe Weekend' } as const;
+const DEFAULT_NAMES = { mall: 'Mall run — Hudson Yards', roadtrip: 'Lake Tahoe Weekend' } as const;
 
 export default function CreateSession() {
   const router = useRouter();
-  const [kind, setKindState] = useState<'roadtrip' | 'hangout'>('hangout');
-  const [name, setName] = useState<string>(DEFAULT_NAMES.hangout);
+  const [kind, setKindState] = useState<'roadtrip' | 'mall'>('mall');
+  const [name, setName] = useState<string>(DEFAULT_NAMES.mall);
   const [durationMin, setDurationMin] = useState(240);
 
-  const setKind = (next: 'roadtrip' | 'hangout') => {
+  const setKind = (next: 'roadtrip' | 'mall') => {
     setKindState(next);
     // keep the demo name in sync unless the user typed their own
-    setName((cur) => (cur === DEFAULT_NAMES.hangout || cur === DEFAULT_NAMES.roadtrip ? DEFAULT_NAMES[next] : cur));
+    setName((cur) => (cur === DEFAULT_NAMES.mall || cur === DEFAULT_NAMES.roadtrip ? DEFAULT_NAMES[next] : cur));
   };
 
   const start = () => {
@@ -68,10 +68,10 @@ export default function CreateSession() {
           <Text style={styles.label}>Kind</Text>
           <View style={styles.row}>
             <KindTile
-              icon="city-variant-outline"
-              label="Hangout"
-              active={kind === 'hangout'}
-              onPress={() => setKind('hangout')}
+              icon="storefront-outline"
+              label="Mall meetup"
+              active={kind === 'mall'}
+              onPress={() => setKind('mall')}
             />
             <KindTile
               icon="car-outline"
@@ -90,7 +90,7 @@ export default function CreateSession() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.destName}>
-                {SCENARIOS[kind === 'roadtrip' ? 'roadtrip' : 'walk'].destination.name}
+                {SCENARIOS[kind].destination.name}
               </Text>
               <Text style={styles.destHint}>Demo destination — place search arrives with M2</Text>
             </View>

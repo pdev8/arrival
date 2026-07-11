@@ -142,7 +142,9 @@ export function useSimulation(running: boolean, scenario: Scenario): Simulation 
       const cum = cumulativeDistances(route);
       const totalM = cum[cum.length - 1];
       const startM = totalM * seed.startFrac;
-      const lights = seed.cruiseMps < DRIVING_MPS ? findLights(route, cum, seed.id) : [];
+      // stoplights are a street thing — walkers only, and never inside a mall
+      const lights =
+        seed.cruiseMps < DRIVING_MPS && scenario.key !== 'mall' ? findLights(route, cum, seed.id) : [];
       const firstLight = lights.findIndex((l) => l.atM > startM);
       members.set(seed.id, {
         seed,
