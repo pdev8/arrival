@@ -2,12 +2,28 @@ import React from 'react';
 import { View } from 'react-native';
 import { UI } from '../lib/colors';
 
+/** How many of `count` dots light up at `progress` — the ring's whole visual state. */
+export function filledDots(progress: number, count: number): number {
+  return Math.round(Math.min(1, Math.max(0, progress)) * count);
+}
+
 /**
  * Progress as a ring of dots around an avatar — dots fill clockwise from 12
  * o'clock as the member covers their route. Pure views (no SVG dependency),
  * and unlike an arc it reads at a glance even at chip size.
+ *
+ * Memoized on the FILLED COUNT, not raw progress: progress changes every
+ * simulation tick, but the ring only looks different when a dot flips.
  */
-export function DotRing({
+export const DotRing = React.memo(DotRingInner, (prev, next) =>
+  prev.size === next.size &&
+  prev.color === next.color &&
+  (prev.count ?? 12) === (next.count ?? 12) &&
+  (prev.dot ?? 3) === (next.dot ?? 3) &&
+  filledDots(prev.progress, prev.count ?? 12) === filledDots(next.progress, next.count ?? 12)
+);
+
+function DotRingInner({
   size,
   progress,
   color,
@@ -21,7 +37,7 @@ export function DotRing({
   dot?: number;
 }) {
   const r = size / 2 - dot / 2;
-  const filled = Math.round(Math.min(1, Math.max(0, progress)) * count);
+  const filled = filledDots(progress, count);
   return (
     <View style={{ position: 'absolute', width: size, height: size }} pointerEvents="none">
       {Array.from({ length: count }, (_, i) => {

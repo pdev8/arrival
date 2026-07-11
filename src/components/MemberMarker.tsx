@@ -24,8 +24,30 @@ interface Props {
  * in the member's color pokes out past the pointed corner, like the sharpened
  * lead of a pencil, so the color leads the photo without tinting it. Idle
  * members relax back to a plain circle. The photo counter-rotates upright.
+ *
+ * Memoized on rendered-visible state (position, ~1° heading, per-second ETA,
+ * state/level/selection) so idle and arrived pucks skip the 4 Hz tick
+ * entirely. onPress identity is deliberately ignored — handlers close over
+ * nothing mutable.
  */
-export function MemberMarker({ member, mapHeading = 0, selected, hidden = false, onPress }: Props) {
+export const MemberMarker = React.memo(
+  MemberMarkerInner,
+  (prev, next) =>
+    prev.selected === next.selected &&
+    prev.hidden === next.hidden &&
+    Math.round(prev.mapHeading ?? 0) === Math.round(next.mapHeading ?? 0) &&
+    prev.member.id === next.member.id &&
+    prev.member.name === next.member.name &&
+    prev.member.color === next.member.color &&
+    prev.member.state === next.member.state &&
+    prev.member.level === next.member.level &&
+    prev.member.pos.latitude === next.member.pos.latitude &&
+    prev.member.pos.longitude === next.member.pos.longitude &&
+    Math.round(prev.member.heading) === Math.round(next.member.heading) &&
+    Math.round(prev.member.etaMin * 60) === Math.round(next.member.etaMin * 60)
+);
+
+function MemberMarkerInner({ member, mapHeading = 0, selected, hidden = false, onPress }: Props) {
   const moving = member.state === 'walking' || member.state === 'driving';
   const rot = moving ? member.heading - mapHeading + 45 : 0;
 

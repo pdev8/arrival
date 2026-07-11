@@ -5,6 +5,7 @@ import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
 import { formatEtaClock } from '../lib/format';
 import { AvatarRing } from './AvatarRing';
+import { filledDots } from './DotRing';
 import { Glass } from './Glass';
 
 interface Props {
@@ -27,38 +28,54 @@ export function MemberRail({ members, selectedId, onSelect }: Props) {
       contentContainerStyle={styles.row}
       style={styles.rail}
     >
-      {members.map((m) => {
-        const selected = m.id === selectedId;
-        const arrived = m.state === 'arrived';
-        return (
-          <Pressable key={m.id} onPress={() => onSelect(m.id)}>
-            <Glass style={[styles.chip, selected && styles.chipSelected]} radius={16} intensity={36}>
-              <AvatarRing
-                source={m.avatar}
-                size={48}
-                avatarSize={36}
-                progress={m.progress}
-                color={m.color}
-                arrived={arrived}
-              />
-              <Text style={styles.name} numberOfLines={1}>
-                {m.name}
-              </Text>
-              <View style={styles.etaRow}>
-                {m.state === 'stopped' && (
-                  <MaterialCommunityIcons name="pause" size={10} color={m.color} />
-                )}
-                <Text style={[styles.eta, { color: arrived ? UI.success : m.color }]}>
-                  {arrived ? 'here' : formatEtaClock(m.etaMin)}
-                </Text>
-              </View>
-            </Glass>
-          </Pressable>
-        );
-      })}
+      {members.map((m) => (
+        <RailChip key={m.id} m={m} selected={m.id === selectedId} onSelect={onSelect} />
+      ))}
     </ScrollView>
   );
 }
+
+/**
+ * One chip, memoized on what it draws (per-second ETA, filled ring dots,
+ * state, selection) so the whole rail doesn't re-render at the 4 Hz tick.
+ * onSelect identity ignored — it closes over nothing mutable.
+ */
+const RailChip = React.memo(
+  function RailChip({ m, selected, onSelect }: { m: SimMember; selected: boolean; onSelect: (id: string) => void }) {
+    const arrived = m.state === 'arrived';
+    return (
+      <Pressable onPress={() => onSelect(m.id)}>
+        <Glass style={[styles.chip, selected && styles.chipSelected]} radius={16} intensity={36}>
+          <AvatarRing
+            source={m.avatar}
+            size={48}
+            avatarSize={36}
+            progress={m.progress}
+            color={m.color}
+            arrived={arrived}
+          />
+          <Text style={styles.name} numberOfLines={1}>
+            {m.name}
+          </Text>
+          <View style={styles.etaRow}>
+            {m.state === 'stopped' && <MaterialCommunityIcons name="pause" size={10} color={m.color} />}
+            <Text style={[styles.eta, { color: arrived ? UI.success : m.color }]}>
+              {arrived ? 'here' : formatEtaClock(m.etaMin)}
+            </Text>
+          </View>
+        </Glass>
+      </Pressable>
+    );
+  },
+  (prev, next) =>
+    prev.selected === next.selected &&
+    prev.m.id === next.m.id &&
+    prev.m.name === next.m.name &&
+    prev.m.color === next.m.color &&
+    prev.m.state === next.m.state &&
+    Math.round(prev.m.etaMin * 60) === Math.round(next.m.etaMin * 60) &&
+    filledDots(prev.m.progress, 14) === filledDots(next.m.progress, 14)
+);
 
 const styles = StyleSheet.create({
   rail: { flexGrow: 0 },
