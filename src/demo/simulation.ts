@@ -14,6 +14,12 @@ import { Stoplight, findLights } from './lights';
 /** simulation tick interval — 4 Hz keeps marker motion fluid */
 const TICK_MS = 250;
 
+/** Adaptive tick: once everyone has arrived nothing on the map moves, so the
+ *  clock drops to 1 Hz (feed timestamps still age). Exported for tests. */
+export function tickIntervalMs(allArrived: boolean): number {
+  return allArrived ? 1000 : TICK_MS;
+}
+
 export { CATEGORY_EMOJI };
 export type { StopCategory };
 
@@ -186,12 +192,14 @@ export function useSimulation(running: boolean, scenario: Scenario): Simulation 
 
   useEffect(() => {
     if (!running) return;
+    const ms = tickIntervalMs(snapshot.allArrived);
     const interval = setInterval(() => {
-      tick(sim.current!, TICK_MS / 1000);
+      tick(sim.current!, ms / 1000);
       publish();
-    }, TICK_MS);
+    }, ms);
     return () => clearInterval(interval);
-  }, [running, publish]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, publish, snapshot.allArrived]);
 
   const vote = useCallback(
     (stopId: string, up: boolean) => {

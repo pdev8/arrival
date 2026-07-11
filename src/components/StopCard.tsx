@@ -7,8 +7,23 @@ import { CATEGORY_ICON } from '../lib/icons';
 import { navigateTo } from '../lib/nav-deeplinks';
 import { Pill } from './Pill';
 
-/** One stop/suggestion in the dock: creator color rail, vote or join actions. */
-export function StopCard({ stop, sim }: { stop: SessionStop; sim: Simulation }) {
+/**
+ * One stop/suggestion in the dock: creator color rail, vote or join actions.
+ * Memoized on value fields — stop objects are mutated in place by the sim,
+ * so reference equality can't be trusted; vote/participant counts can.
+ */
+export const StopCard = React.memo(
+  StopCardInner,
+  (prev, next) =>
+    prev.stop.id === next.stop.id &&
+    prev.stop.status === next.stop.status &&
+    prev.stop.name === next.stop.name &&
+    prev.stop.votesUp.length === next.stop.votesUp.length &&
+    prev.stop.votesDown.length === next.stop.votesDown.length &&
+    prev.stop.participants.length === next.stop.participants.length
+);
+
+function StopCardInner({ stop, sim }: { stop: SessionStop; sim: Simulation }) {
   const creator = sim.members.find((m) => m.id === stop.createdBy);
   const color = creator?.color ?? UI.accent;
   const youVotedUp = stop.votesUp.includes('you');

@@ -144,22 +144,29 @@ function TickerDot({ memberId, members }: { memberId?: string; members: SimMembe
   return <Image source={member.avatar} fadeDuration={0} style={[styles.tickerAvatar, { borderColor: member.color }]} />;
 }
 
-function FeedRow({ e, members, elapsedSec }: { e: FeedEvent; members: SimMember[]; elapsedSec: number }) {
-  const member = members.find((m) => m.id === e.memberId);
-  return (
-    <View style={styles.feedRow}>
-      {member ? (
-        <Image source={member.avatar} fadeDuration={0} style={[styles.feedAvatar, { borderColor: member.color }]} />
-      ) : (
-        <View style={styles.feedSysDot}>
-          <MaterialCommunityIcons name="flag-outline" size={11} color={UI.textDim} />
-        </View>
-      )}
-      <Text style={styles.feedText}>{e.text}</Text>
-      <Text style={styles.feedTime}>{timeAgo(elapsedSec - e.at)}</Text>
-    </View>
-  );
-}
+/** Memoized on the row's visible output: the event is immutable, the member's
+ *  avatar/color are stable per id, so only the "3m" bucket can change it. */
+const FeedRow = React.memo(
+  function FeedRow({ e, members, elapsedSec }: { e: FeedEvent; members: SimMember[]; elapsedSec: number }) {
+    const member = members.find((m) => m.id === e.memberId);
+    return (
+      <View style={styles.feedRow}>
+        {member ? (
+          <Image source={member.avatar} fadeDuration={0} style={[styles.feedAvatar, { borderColor: member.color }]} />
+        ) : (
+          <View style={styles.feedSysDot}>
+            <MaterialCommunityIcons name="flag-outline" size={11} color={UI.textDim} />
+          </View>
+        )}
+        <Text style={styles.feedText}>{e.text}</Text>
+        <Text style={styles.feedTime}>{timeAgo(elapsedSec - e.at)}</Text>
+      </View>
+    );
+  },
+  (prev, next) =>
+    prev.e.id === next.e.id &&
+    timeAgo(prev.elapsedSec - prev.e.at) === timeAgo(next.elapsedSec - next.e.at)
+);
 
 const styles = StyleSheet.create({
   wrap: {

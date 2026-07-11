@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Share, StyleSheet, View } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
 import { ActivityDock, DOCK_PEEK } from '../src/components/ActivityDock';
@@ -125,11 +125,12 @@ export default function SessionScreen() {
     (you && you.mode === 'foot' && you.steps > 0 ? ` · ${you.steps.toLocaleString()} steps` : '') +
     ` · ends ${remH > 0 ? `${remH}h ` : ''}${remM}m`;
 
-  const select = (id: string) => {
+  // stable identity so memoized chips/markers aren't re-rendered by the handler
+  const select = useCallback((id: string) => {
     setSelectedId((cur) => (cur === id ? null : id));
     setFollow(true);
     setAutoFit(false);
-  };
+  }, []);
 
   const retrace = (m: SimMember) => {
     if (m.trail.length > 1) {

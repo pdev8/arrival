@@ -1,4 +1,13 @@
-import { levelAt } from './simulation';
+import { levelAt, tickIntervalMs } from './simulation';
+
+describe('tickIntervalMs', () => {
+  it('runs at 4 Hz while anyone is moving', () => {
+    expect(tickIntervalMs(false)).toBe(250);
+  });
+  it('drops to 1 Hz once everyone arrived', () => {
+    expect(tickIntervalMs(true)).toBe(1000);
+  });
+});
 
 const spans = [
   { fromFrac: 0.3, toFrac: 0.6, level: -1, label: 'subway' },
