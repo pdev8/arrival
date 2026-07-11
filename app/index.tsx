@@ -1,12 +1,14 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmbientMap } from '../src/components/AmbientMap';
 import { Glass } from '../src/components/Glass';
 import { seedNycArchive } from '../src/demo/nyc-archive';
 import { ArchivedSession, listArchives } from '../src/lib/archive';
+import { joinLiveTrip } from '../src/lib/live-session';
+import { supabaseConfigured } from '../src/lib/supabase';
 import { UI } from '../src/lib/colors';
 
 const FEATURES = [
@@ -120,9 +122,33 @@ export default function Home() {
             <Text style={styles.primaryBtnText}>Start a session</Text>
           </Pressable>
           <Pressable
-            onPress={() =>
-              Alert.alert('Join a session', 'Joining by link/code arrives with the live backend (M1). This demo simulates a full session — tap “Start a session”.')
-            }
+            onPress={() => {
+              if (!supabaseConfigured) {
+                Alert.alert('Join a session', 'Joining by link/code arrives with the live backend (M1). This demo simulates a full session — tap “Start a session”.');
+                return;
+              }
+              if (Platform.OS !== 'ios') {
+                Alert.alert('Join a session', 'Enter-code UI lands with universal links (B3); use iOS to join by code for now.');
+                return;
+              }
+              Alert.prompt('Join a session', 'Enter the invite code (like kfx-mqv-dhz)', async (code) => {
+                if (!code) return;
+                try {
+                  const trip = await joinLiveTrip(code);
+                  router.push({
+                    pathname: '/session',
+                    params: {
+                      name: trip.name,
+                      kind: trip.kind,
+                      code: trip.joinCode,
+                      durationMin: String(Math.max(1, Math.round((trip.endsAt - Date.now()) / 60000))),
+                    },
+                  });
+                } catch (e) {
+                  Alert.alert('Couldn’t join', (e as Error).message);
+                }
+              });
+            }}
           >
             <Glass style={styles.secondaryBtn} radius={16} intensity={32}>
               <Text style={styles.secondaryBtnText}>Join with a link</Text>
