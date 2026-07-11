@@ -119,6 +119,7 @@ function Recap({ sim }: { sim: Simulation }) {
   return (
     <View style={styles.recap}>
       <Text style={styles.recapTitle}>Everyone made it</Text>
+      <Text style={styles.recapSub}>Saved to your archive — open it any time from Home.</Text>
       <View style={styles.recapRow}>
         {groupSteps > 0 && <Stat label="group steps" value={groupSteps.toLocaleString()} />}
         {you && <Stat label="you covered" value={formatDistance(you.traveledM)} />}
@@ -195,6 +196,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   recapTitle: { color: UI.brand, fontSize: 14, fontWeight: '800' },
+  recapSub: { color: UI.textDim, fontSize: 11.5, marginTop: 2 },
   recapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 8 },
   stat: { minWidth: 70 },
   statValue: { color: UI.text, fontSize: 15, fontWeight: '800', fontVariant: ['tabular-nums'] },

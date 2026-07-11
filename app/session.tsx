@@ -16,6 +16,7 @@ import { TrailPath } from '../src/components/TrailPath';
 import { useClusters } from '../src/hooks/useClusters';
 import { SCENARIOS } from '../src/demo/data';
 import { SimMember, useSimulation } from '../src/demo/simulation';
+import { saveArchive } from '../src/lib/archive';
 import { UI } from '../src/lib/colors';
 import { summarizeConvergence } from '../src/lib/convergence';
 import { LatLng } from '../src/lib/geo';
@@ -24,7 +25,7 @@ import { navigateTo } from '../src/lib/nav-deeplinks';
 const FIT_PADDING = { top: 130, right: 60, bottom: 320, left: 60 };
 const TRAIL_PADDING = { top: 150, right: 70, bottom: 340, left: 70 };
 /** follow-mode zoom per scenario kind */
-const FOLLOW_ZOOM: Record<string, number> = { walk: 16.5, roadtrip: 11 };
+const FOLLOW_ZOOM: Record<string, number> = { walk: 16.5, roadtrip: 11, mall: 18 };
 
 export default function SessionScreen() {
   const router = useRouter();
@@ -32,7 +33,8 @@ export default function SessionScreen() {
   const sessionName = params.name ?? 'Session';
   const joinCode = params.code ?? 'kfx-mqvp-dhz';
   const durationMin = Number(params.durationMin ?? 240);
-  const scenario = SCENARIOS[params.kind === 'roadtrip' ? 'roadtrip' : 'walk'];
+  const scenario =
+    SCENARIOS[params.kind === 'roadtrip' ? 'roadtrip' : params.kind === 'mall' ? 'mall' : 'walk'];
 
   const sim = useSimulation(true, scenario);
   const mapRef = useRef<MapView>(null);
@@ -49,6 +51,33 @@ export default function SessionScreen() {
   const endsAt = useRef(Date.now() + durationMin * 60_000);
 
   const inviteMessage = `Join my Arrival session “${sessionName}”: https://arrival.app/j/${joinCode}`;
+
+  // Archive on completion: the session freezes to the profile with every
+  // trace intact, viewable read-only from Home (F15).
+  const archivedRef = useRef(false);
+  useEffect(() => {
+    if (!sim.allArrived || archivedRef.current) return;
+    archivedRef.current = true;
+    saveArchive({
+      id: `session-${joinCode}`,
+      name: sessionName,
+      kind: params.kind ?? 'walk',
+      endedAt: Date.now(),
+      durationSec: Math.round(sim.elapsedSec),
+      destination: scenario.destination,
+      members: sim.members.map((m) => ({
+        id: m.id,
+        name: m.name,
+        color: m.color,
+        avatarKey: m.id,
+        mode: m.mode,
+        steps: m.steps,
+        traveledM: Math.round(m.traveledM),
+        trail: m.trail,
+      })),
+      arrivalOrder: sim.arrivalOrder,
+    }).catch(() => {});
+  }, [sim.allArrived]);
 
   // Camera: follow the selected member, otherwise auto-fit the whole crew.
   useEffect(() => {

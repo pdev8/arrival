@@ -53,6 +53,9 @@ const AVATARS = {
   noah: require('../../assets/avatars/noah.jpg'),
 } as const;
 
+/** archived sessions store an avatarKey; demo keys are member ids */
+export const DEMO_AVATARS: Record<string, ImageSourcePropType> = AVATARS;
+
 export interface ScenarioPoi {
   name: string;
   category: StopCategory;
@@ -60,7 +63,7 @@ export interface ScenarioPoi {
 }
 
 export interface Scenario {
-  key: 'walk' | 'roadtrip';
+  key: 'walk' | 'roadtrip' | 'mall';
   destination: { name: string; pos: LatLng };
   routes: Record<string, LatLng[]>;
   members: MemberSeed[];
@@ -154,4 +157,89 @@ const ROADTRIP: Scenario = {
   },
 };
 
-export const SCENARIOS: Record<'walk' | 'roadtrip', Scenario> = { walk: WALK, roadtrip: ROADTRIP };
+/* ------------------------------------------------------------------ */
+/* Mall meetup — Shops at Hudson Yards, converging on the food court   */
+/* ------------------------------------------------------------------ */
+
+// Indoor paths are hand-drawn (OSRM can't route mall corridors) and exist to
+// demo VERTICAL awareness: everyone converges on the Level-2 food court from
+// different floors — parking garage, subway, street entrance, upper shops.
+const MALL: Scenario = {
+  key: 'mall',
+  destination: { name: 'Food Court — Level 2', pos: { latitude: 40.75385, longitude: -74.00125 } },
+  routes: {
+    // B1 parking garage → Level 1 corridor → food court
+    you: [
+      { latitude: 40.7527, longitude: -74.0004 },
+      { latitude: 40.75285, longitude: -74.00075 },
+      { latitude: 40.75275, longitude: -74.0011 },
+      { latitude: 40.75295, longitude: -74.00135 },
+      { latitude: 40.7532, longitude: -74.0015 },
+      { latitude: 40.75345, longitude: -74.0014 },
+      { latitude: 40.75355, longitude: -74.0011 },
+      { latitude: 40.7537, longitude: -74.0009 },
+      { latitude: 40.7539, longitude: -74.001 },
+      { latitude: 40.75385, longitude: -74.00125 },
+    ],
+    // Level 3 shops → escalators down
+    sarah: [
+      { latitude: 40.75455, longitude: -74.0006 },
+      { latitude: 40.7544, longitude: -74.0009 },
+      { latitude: 40.7545, longitude: -74.0012 },
+      { latitude: 40.7543, longitude: -74.00145 },
+      { latitude: 40.7541, longitude: -74.0016 },
+      { latitude: 40.75395, longitude: -74.0014 },
+      { latitude: 40.754, longitude: -74.0011 },
+      { latitude: 40.75385, longitude: -74.00125 },
+    ],
+    // street entrance, Level 1 the long way
+    mike: [
+      { latitude: 40.7547, longitude: -74.00005 },
+      { latitude: 40.7545, longitude: -74.0003 },
+      { latitude: 40.75425, longitude: -74.0005 },
+      { latitude: 40.754, longitude: -74.0007 },
+      { latitude: 40.7538, longitude: -74.00095 },
+      { latitude: 40.75365, longitude: -74.00115 },
+      { latitude: 40.75385, longitude: -74.00125 },
+    ],
+    // subway concourse below → up through Level 1
+    jess: [
+      { latitude: 40.753, longitude: -73.99985 },
+      { latitude: 40.7532, longitude: -74.0001 },
+      { latitude: 40.7531, longitude: -74.00045 },
+      { latitude: 40.7533, longitude: -74.0007 },
+      { latitude: 40.7535, longitude: -74.0006 },
+      { latitude: 40.7537, longitude: -74.0008 },
+      { latitude: 40.7536, longitude: -74.00105 },
+      { latitude: 40.75385, longitude: -74.00125 },
+    ],
+  },
+  members: [
+    { id: 'you', name: 'You', avatar: AVATARS.you, color: MEMBER_PALETTE[0], isYou: true, routeKey: 'you', startFrac: 0.05, cruiseMps: 1.2, levelSpans: [{ fromFrac: 0, toFrac: 0.35, level: -1, label: 'parking' }, { fromFrac: 0.35, toFrac: 0.8, level: 1, label: 'level 1' }, { fromFrac: 0.8, toFrac: 1, level: 2, label: 'food court' }] },
+    { id: 'sarah', name: 'Sarah', avatar: AVATARS.sarah, color: MEMBER_PALETTE[3], isYou: false, routeKey: 'sarah', startFrac: 0.08, cruiseMps: 1.15, levelSpans: [{ fromFrac: 0, toFrac: 0.55, level: 3, label: 'level 3' }, { fromFrac: 0.55, toFrac: 1, level: 2, label: 'food court' }] },
+    { id: 'mike', name: 'Mike', avatar: AVATARS.mike, color: MEMBER_PALETTE[1], isYou: false, routeKey: 'mike', startFrac: 0.05, cruiseMps: 1.3, levelSpans: [{ fromFrac: 0, toFrac: 0.7, level: 1, label: 'level 1' }, { fromFrac: 0.7, toFrac: 1, level: 2, label: 'food court' }] },
+    { id: 'jess', name: 'Jess', avatar: AVATARS.jess, color: MEMBER_PALETTE[2], isYou: false, routeKey: 'jess', startFrac: 0.06, cruiseMps: 1.25, levelSpans: [{ fromFrac: 0, toFrac: 0.3, level: -1, label: 'subway' }, { fromFrac: 0.3, toFrac: 0.75, level: 1, label: 'level 1' }, { fromFrac: 0.75, toFrac: 1, level: 2, label: 'food court' }] },
+  ],
+  timeScale: 1,
+  arriveRadiusM: 12,
+  initialRegion: { latitude: 40.7538, longitude: -74.0009, latitudeDelta: 0.006, longitudeDelta: 0.006 },
+  stopEvent: {
+    memberId: 'mike',
+    poi: { name: 'Blue Bottle — Level 1', category: 'coffee', pos: { latitude: 40.75425, longitude: -74.0005 } },
+    note: 'Grabbing coffee, ~2 min',
+    durationSec: 75,
+  },
+  suggestEvent: {
+    memberId: 'sarah',
+    poi: { name: 'Shake Shack — Level 2', category: 'food', pos: { latitude: 40.75395, longitude: -74.0014 } },
+    note: 'Burgers when we regroup?',
+    atElapsedSec: 20,
+    allyVote: { memberId: 'jess', atElapsedSec: 40 },
+  },
+};
+
+export const SCENARIOS: Record<'walk' | 'roadtrip' | 'mall', Scenario> = {
+  walk: WALK,
+  roadtrip: ROADTRIP,
+  mall: MALL,
+};

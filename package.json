@@ -4,6 +4,7 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^3.1.1",
     "expo": "~54.0.0",
     "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.8",
@@ -37,6 +38,9 @@
     "testMatch": [
       "**/src/**/*.test.ts"
     ],
-    "clearMocks": true
+    "clearMocks": true,
+    "setupFiles": [
+      "<rootDir>/jest.setup.js"
+    ]
   }
 }
