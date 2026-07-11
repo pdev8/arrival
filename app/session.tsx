@@ -17,6 +17,7 @@ import { useClusters } from '../src/hooks/useClusters';
 import { SCENARIOS } from '../src/demo/data';
 import { SimMember, useSimulation } from '../src/demo/simulation';
 import { saveArchive } from '../src/lib/archive';
+import { surfaceError } from '../src/lib/errors';
 import { UI } from '../src/lib/colors';
 import { summarizeConvergence } from '../src/lib/convergence';
 import { LatLng } from '../src/lib/geo';
@@ -76,7 +77,7 @@ export default function SessionScreen() {
         trail: m.trail,
       })),
       arrivalOrder: sim.arrivalOrder,
-    }).catch(() => {});
+    }).catch((e) => surfaceError('Saving session to archive', e));
   }, [sim.allArrived]);
 
   // Camera: follow the selected member, otherwise auto-fit the whole crew.

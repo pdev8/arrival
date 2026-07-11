@@ -9,6 +9,7 @@ import { seedNycArchive } from '../src/demo/nyc-archive';
 import { ArchivedSession, listArchives } from '../src/lib/archive';
 import { joinLiveTrip } from '../src/lib/live-session';
 import { supabaseConfigured } from '../src/lib/supabase';
+import { surfaceError } from '../src/lib/errors';
 import { UI } from '../src/lib/colors';
 
 const FEATURES = [
@@ -49,7 +50,7 @@ export default function Home() {
         .then((a) => {
           if (live) setArchives(a);
         })
-        .catch(() => {});
+        .catch((e) => surfaceError('Loading archives', e));
       return () => {
         live = false;
       };
@@ -145,7 +146,7 @@ export default function Home() {
                     },
                   });
                 } catch (e) {
-                  Alert.alert('Couldn’t join', (e as Error).message);
+                  surfaceError('Couldn’t join session', e);
                 }
               });
             }}

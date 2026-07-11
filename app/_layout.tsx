@@ -1,6 +1,8 @@
+import '../src/lib/polyfills';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
+import { ErrorToastHost } from '../src/components/ErrorToast';
 import { UI } from '../src/lib/colors';
 
 export default function RootLayout() {
@@ -13,6 +15,7 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: UI.bg },
         }}
       />
+      <ErrorToastHost />
     </ErrorBoundary>
   );
 }
