@@ -1,10 +1,12 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useRouter } from 'expo-router';
-import React from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmbientMap } from '../src/components/AmbientMap';
 import { Glass } from '../src/components/Glass';
+import { seedNycArchive } from '../src/demo/nyc-archive';
+import { ArchivedSession, listArchives } from '../src/lib/archive';
 import { UI } from '../src/lib/colors';
 
 const FEATURES = [
@@ -34,11 +36,29 @@ const FEATURES = [
  */
 export default function Home() {
   const router = useRouter();
+  const [archives, setArchives] = useState<ArchivedSession[]>([]);
+
+  // seed the NYC walk on first run, then load whatever's archived
+  useFocusEffect(
+    useCallback(() => {
+      let live = true;
+      seedNycArchive()
+        .then(listArchives)
+        .then((a) => {
+          if (live) setArchives(a);
+        })
+        .catch(() => {});
+      return () => {
+        live = false;
+      };
+    }, [])
+  );
+
   return (
     <View style={styles.screen}>
       <AmbientMap />
       <SafeAreaView style={styles.safe}>
-        <View style={styles.top}>
+        <ScrollView contentContainerStyle={styles.top} showsVerticalScrollIndicator={false}>
           <View style={styles.hero}>
             <View style={styles.mark}>
               <View style={styles.markDot} />
@@ -62,7 +82,38 @@ export default function Home() {
               </View>
             ))}
           </Glass>
-        </View>
+
+          {archives.length > 0 && (
+            <>
+              <Text style={styles.sectionTitle}>Archived sessions</Text>
+              <Glass style={styles.archives} radius={24} intensity={32}>
+                {archives.slice(0, 4).map((a, i) => (
+                  <Pressable
+                    key={a.id}
+                    style={[styles.archiveRow, i > 0 && styles.archiveRowBorder]}
+                    onPress={() => router.push(`/archive/${a.id}`)}
+                  >
+                    <View style={styles.archiveIcon}>
+                      <MaterialCommunityIcons name="archive-outline" size={15} color={UI.brand} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.archiveName} numberOfLines={1}>{a.name}</Text>
+                      <Text style={styles.archiveMeta}>
+                        {new Date(a.endedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        {' · '}
+                        {a.members.length} people
+                        {a.members.some((m) => m.steps > 0)
+                          ? ` · ${a.members.reduce((s, m) => s + m.steps, 0).toLocaleString()} steps`
+                          : ''}
+                      </Text>
+                    </View>
+                    <MaterialCommunityIcons name="chevron-right" size={18} color={UI.textDim} />
+                  </Pressable>
+                ))}
+              </Glass>
+            </>
+          )}
+        </ScrollView>
 
         <View style={styles.actions}>
           <Pressable style={styles.primaryBtn} onPress={() => router.push('/create')}>
@@ -87,7 +138,29 @@ export default function Home() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: UI.bg },
   safe: { flex: 1, justifyContent: 'space-between' },
-  top: { paddingHorizontal: 20, gap: 14 },
+  top: { paddingHorizontal: 20, gap: 14, paddingBottom: 8 },
+  sectionTitle: {
+    color: UI.textDim,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: 4,
+    marginBottom: -6,
+  },
+  archives: { paddingHorizontal: 14 },
+  archiveRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 11 },
+  archiveRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.1)' },
+  archiveIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: `${UI.brand}1F`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  archiveName: { color: UI.text, fontSize: 14, fontWeight: '700' },
+  archiveMeta: { color: UI.textDim, fontSize: 12, marginTop: 1 },
   hero: { alignItems: 'center', paddingVertical: 38 },
   mark: {
     width: 52,

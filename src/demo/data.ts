@@ -53,6 +53,9 @@ const AVATARS = {
   noah: require('../../assets/avatars/noah.jpg'),
 } as const;
 
+/** archived sessions store an avatarKey; demo keys are member ids */
+export const DEMO_AVATARS: Record<string, ImageSourcePropType> = AVATARS;
+
 export interface ScenarioPoi {
   name: string;
   category: StopCategory;
