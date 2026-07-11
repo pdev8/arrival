@@ -15,6 +15,7 @@ export function DestinationMarker({ name, pos, onPress }: { name: string; pos: L
         </View>
         <View style={styles.tag}>
           <Text style={styles.label}>{name}</Text>
+          {onPress && <Text style={styles.nav}>navigate ›</Text>}
         </View>
       </View>
     </Marker>
@@ -48,4 +49,5 @@ const styles = StyleSheet.create({
     paddingVertical: 2.5,
   },
   label: { color: UI.text, fontSize: 10.5, fontWeight: '700' },
+  nav: { color: UI.textDim, fontSize: 9.5, fontWeight: '600', marginTop: 0.5 },
 });

@@ -19,6 +19,7 @@ import { SimMember, useSimulation } from '../src/demo/simulation';
 import { UI } from '../src/lib/colors';
 import { summarizeConvergence } from '../src/lib/convergence';
 import { LatLng } from '../src/lib/geo';
+import { navigateTo } from '../src/lib/nav-deeplinks';
 
 const FIT_PADDING = { top: 130, right: 60, bottom: 320, left: 60 };
 const TRAIL_PADDING = { top: 150, right: 70, bottom: 340, left: 70 };
@@ -135,7 +136,17 @@ export default function SessionScreen() {
             <TrailPath key={`trail-${m.id}`} member={m} />
           ))}
 
-        <DestinationMarker name={scenario.destination.name} pos={scenario.destination.pos} />
+        <DestinationMarker
+          name={scenario.destination.name}
+          pos={scenario.destination.pos}
+          onPress={() =>
+            navigateTo(
+              scenario.destination.pos,
+              scenario.destination.name,
+              scenario.key === 'roadtrip' ? 'drive' : 'walk'
+            )
+          }
+        />
 
         {sim.stops.map((s) => (
           <StopPin

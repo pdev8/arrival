@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SessionStop, Simulation } from '../demo/simulation';
 import { UI } from '../lib/colors';
 import { CATEGORY_ICON } from '../lib/icons';
+import { navigateTo } from '../lib/nav-deeplinks';
 import { Pill } from './Pill';
 
 /** One stop/suggestion in the dock: creator color rail, vote or join actions. */
@@ -42,6 +43,20 @@ export function StopCard({ stop, sim }: { stop: SessionStop; sim: Simulation }) 
           <Text style={styles.meta}>Your stop</Text>
         )}
         {stop.participants.length > 1 && <Text style={styles.meta}>{stop.participants.length} stopping</Text>}
+        <View style={{ marginLeft: 'auto' }}>
+          <Pill
+            icon="navigation-variant-outline"
+            label="Navigate"
+            active={false}
+            onPress={() =>
+              navigateTo(
+                stop.pos,
+                stop.name,
+                sim.members.find((m) => m.isYou)?.mode === 'car' ? 'drive' : 'walk'
+              )
+            }
+          />
+        </View>
       </View>
     </View>
   );
