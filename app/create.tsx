@@ -1,12 +1,14 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmbientMap } from '../src/components/AmbientMap';
 import { Glass } from '../src/components/Glass';
 import { UI } from '../src/lib/colors';
 import { SCENARIOS } from '../src/demo/data';
+import { createLiveTrip } from '../src/lib/live-session';
+import { supabaseConfigured } from '../src/lib/supabase';
 
 const DURATIONS = [
   { label: '2h', min: 120 },
@@ -37,10 +39,33 @@ export default function CreateSession() {
     setName((cur) => (cur === DEFAULT_NAMES.mall || cur === DEFAULT_NAMES.roadtrip ? DEFAULT_NAMES[next] : cur));
   };
 
-  const start = () => {
+  const [creating, setCreating] = useState(false);
+
+  // Live backend when configured (B2): the RPC mints the real join code.
+  // Movement stays simulated until B4 wires the realtime channel.
+  const start = async () => {
+    const trimmed = name.trim() || 'Untitled session';
+    let code = makeJoinCode();
+    if (supabaseConfigured) {
+      setCreating(true);
+      try {
+        const trip = await createLiveTrip({
+          name: trimmed,
+          kind,
+          durationMin,
+          destinationName: SCENARIOS[kind].destination.name,
+          destination: SCENARIOS[kind].destination.pos,
+        });
+        code = trip.joinCode;
+      } catch (e) {
+        Alert.alert('Live session unavailable', `Running in demo mode. (${(e as Error).message})`);
+      } finally {
+        setCreating(false);
+      }
+    }
     router.replace({
       pathname: '/session',
-      params: { name: name.trim() || 'Untitled session', kind, durationMin: String(durationMin), code: makeJoinCode() },
+      params: { name: trimmed, kind, durationMin: String(durationMin), code },
     });
   };
 
@@ -111,8 +136,8 @@ export default function CreateSession() {
         </Glass>
 
         <View style={{ flex: 1 }} />
-        <Pressable style={styles.primaryBtn} onPress={start}>
-          <Text style={styles.primaryBtnText}>Create & get invite link</Text>
+        <Pressable style={[styles.primaryBtn, creating && { opacity: 0.6 }]} onPress={start} disabled={creating}>
+          <Text style={styles.primaryBtnText}>{creating ? 'Creating…' : 'Create & get invite link'}</Text>
         </Pressable>
         <Text style={styles.footNote}>Location sharing ends automatically when the session does.</Text>
       </SafeAreaView>
