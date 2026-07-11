@@ -13,6 +13,8 @@ import {
 import { FeedEvent, SimMember, Simulation } from '../demo/simulation';
 import { UI } from '../lib/colors';
 import { formatDistance, timeAgo } from '../lib/format';
+import { recapStats } from '../lib/recap';
+import { RecapShare } from './RecapShareCard';
 import { Glass } from './Glass';
 import { StopCard } from './StopCard';
 
@@ -29,7 +31,7 @@ const CLOSED = DOCK_H - DOCK_PEEK;
  * shows a one-line live ticker (latest event); drag or tap to expand. When
  * everyone arrives it leads with a session recap.
  */
-export function ActivityDock({ sim }: { sim: Simulation }) {
+export function ActivityDock({ sim, sessionName, destinationName }: { sim: Simulation; sessionName: string; destinationName: string }) {
   const y = useRef(new Animated.Value(CLOSED)).current;
   const yNow = useRef(CLOSED);
   const dragFrom = useRef(CLOSED);
@@ -88,7 +90,7 @@ export function ActivityDock({ sim }: { sim: Simulation }) {
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} scrollEnabled={open}>
-          {sim.allArrived && <Recap sim={sim} />}
+          {sim.allArrived && <Recap sim={sim} sessionName={sessionName} destinationName={destinationName} />}
 
           {activeStops.length > 0 && <Text style={styles.sectionTitle}>Stops & suggestions</Text>}
           {activeStops.map((s) => (
@@ -110,21 +112,26 @@ export function ActivityDock({ sim }: { sim: Simulation }) {
 }
 
 /** Session recap once everyone's arrived: the numbers the walk earned. */
-function Recap({ sim }: { sim: Simulation }) {
-  const first = sim.members.find((m) => m.id === sim.arrivalOrder[0]);
-  const last = sim.members.find((m) => m.id === sim.arrivalOrder[sim.arrivalOrder.length - 1]);
-  const groupSteps = sim.members.reduce((s, m) => s + m.steps, 0);
-  const you = sim.members.find((m) => m.isYou);
+function Recap({ sim, sessionName, destinationName }: { sim: Simulation; sessionName: string; destinationName: string }) {
+  const stats = recapStats(sim.members, sim.arrivalOrder);
   return (
     <View style={styles.recap}>
       <Text style={styles.recapTitle}>Everyone made it</Text>
       <Text style={styles.recapSub}>Saved to your archive — open it any time from Home.</Text>
       <View style={styles.recapRow}>
-        {groupSteps > 0 && <Stat label="group steps" value={groupSteps.toLocaleString()} />}
-        {you && <Stat label="you covered" value={formatDistance(you.traveledM)} />}
-        {first && <Stat label="first in" value={first.name} />}
-        {last && first !== last && <Stat label="last in" value={last.name} />}
+        {stats.groupSteps > 0 && <Stat label="group steps" value={stats.groupSteps.toLocaleString()} />}
+        {stats.youTraveledM != null && <Stat label="you covered" value={formatDistance(stats.youTraveledM)} />}
+        {stats.firstName && <Stat label="first in" value={stats.firstName} />}
+        {stats.lastName && <Stat label="last in" value={stats.lastName} />}
       </View>
+      <RecapShare
+        sessionName={sessionName}
+        destinationName={destinationName}
+        endedAt={Date.now()}
+        durationSec={Math.round(sim.elapsedSec)}
+        members={sim.members.map((m) => ({ id: m.id, name: m.name, color: m.color, avatar: m.avatar, steps: m.steps }))}
+        stats={stats}
+      />
     </View>
   );
 }

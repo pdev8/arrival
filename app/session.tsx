@@ -257,7 +257,7 @@ export default function SessionScreen() {
         )}
       </View>
 
-      <ActivityDock sim={sim} />
+      <ActivityDock sim={sim} sessionName={sessionName} destinationName={scenario.destination.name} />
 
       <PlaceSheet
         pos={placePick}
