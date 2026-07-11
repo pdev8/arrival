@@ -64,7 +64,7 @@ export function PlaceSheet({
           />
           <View style={styles.actions}>
             <Pressable style={[styles.btn, styles.btnPrimary]} onPress={() => onAnnounce(category, note)}>
-              <Text style={styles.btnPrimaryText}>I'm stopping here</Text>
+              <Text style={styles.btnPrimaryText}>I&apos;m stopping here</Text>
             </Pressable>
             <Pressable style={[styles.btn, styles.btnOutline]} onPress={() => onSuggest(category, note)}>
               <Text style={styles.btnText}>Suggest to group</Text>
