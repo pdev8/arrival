@@ -1,7 +1,7 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmbientMap } from '../src/components/AmbientMap';
 import { Glass } from '../src/components/Glass';
@@ -9,6 +9,7 @@ import { UI } from '../src/lib/colors';
 import { SCENARIOS } from '../src/demo/data';
 import { createLiveTrip } from '../src/lib/live-session';
 import { supabaseConfigured } from '../src/lib/supabase';
+import { surfaceError } from '../src/lib/errors';
 
 const DURATIONS = [
   { label: '2h', min: 120 },
@@ -58,7 +59,7 @@ export default function CreateSession() {
         });
         code = trip.joinCode;
       } catch (e) {
-        Alert.alert('Live session unavailable', `Running in demo mode. (${(e as Error).message})`);
+        surfaceError('Live session unavailable — demo mode', e);
       } finally {
         setCreating(false);
       }
