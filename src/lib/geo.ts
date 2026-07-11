@@ -61,23 +61,6 @@ export function pointAlongRoute(
 }
 
 /**
- * Chaikin corner-cutting: rounds sharp polyline corners into smooth curves
- * while preserving endpoints. Two iterations ≈ visually continuous turns.
- */
-export function chaikinSmooth(route: LatLng[], iterations = 2): LatLng[] {
-  let pts = route;
-  for (let it = 0; it < iterations; it++) {
-    const out: LatLng[] = [pts[0]];
-    for (let i = 0; i < pts.length - 1; i++) {
-      out.push(lerp(pts[i], pts[i + 1], 0.25), lerp(pts[i], pts[i + 1], 0.75));
-    }
-    out.push(pts[pts.length - 1]);
-    pts = out;
-  }
-  return pts;
-}
-
-/**
  * The stretch of a route between `fromM` and `toM` meters: every waypoint in
  * between, with exact interpolated endpoints. Used for breadcrumb trails.
  */
@@ -103,26 +86,4 @@ export function headingAlongRoute(route: LatLng[], cum: number[], atM: number, l
   const behind = pointAlongRoute(route, cum, Math.max(0, atM - lookM)).pos;
   const ahead = pointAlongRoute(route, cum, Math.min(total, atM + lookM)).pos;
   return bearingDeg(behind, ahead);
-}
-
-/** Bearing → 8-wind compass direction ("NE"), for "0.4 mi NE of you" lines. */
-export function compassDir(bearing: number): string {
-  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  return dirs[Math.round((((bearing % 360) + 360) % 360) / 45) % 8];
-}
-
-/** ETA as a live countdown clock: m:ss, or h:mm:ss beyond an hour. */
-export function formatEtaClock(minutes: number): string {
-  const totalSec = Math.max(0, Math.round(minutes * 60));
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
-}
-
-export function formatDistance(meters: number): string {
-  const mi = meters / 1609.34;
-  if (mi < 0.19) return `${Math.round(meters * 3.281)} ft`;
-  return mi >= 10 ? `${Math.round(mi)} mi` : `${mi.toFixed(1)} mi`;
 }

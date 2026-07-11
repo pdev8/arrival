@@ -2,14 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImageSourcePropType } from 'react-native';
 import {
   LatLng,
-  bearingDeg,
   cumulativeDistances,
   distanceM,
   headingAlongRoute,
   pointAlongRoute,
   routeSlice,
 } from '../lib/geo';
-import { CATEGORY_EMOJI, MemberSeed, Scenario, StopCategory } from './data';
+import { CATEGORY_EMOJI, LevelSpan, MemberSeed, Scenario, StopCategory } from './data';
+import { Stoplight, findLights } from './lights';
 
 /** simulation tick interval — 4 Hz keeps marker motion fluid */
 const TICK_MS = 250;
@@ -24,13 +24,6 @@ const DRIVING_MPS = 3;
 
 /** average stride length used to derive step counts from distance walked */
 const STRIDE_M = 0.75;
-
-/* Stoplights: walkers pause briefly at some corners and crossings. */
-const LIGHT_MIN_WAIT_S = 4;
-const LIGHT_WAIT_SPAN_S = 9; // waits land in 4–13s
-const LIGHT_EVERY_M = 220; // candidate mid-block crossings between corners
-const LIGHT_MIN_GAP_M = 90; // at most one light per block
-const LIGHT_RED_PCT = 55; // odds a given light catches you
 
 export interface SimMember {
   id: string;
@@ -50,6 +43,10 @@ export interface SimMember {
   steps: number;
   /** fraction of their route completed, 0..1 — drives the progress rings */
   progress: number;
+  /** floors relative to street (-1 = B1, 2 = F2), null when at street level */
+  level: number | null;
+  /** what the level is ("subway", "shops") when known */
+  levelLabel?: string;
   /** distance covered this session, meters */
   traveledM: number;
   /** the path traveled this session, for breadcrumb trails */
@@ -89,7 +86,7 @@ interface InternalMember {
   stopUntil: number | null;
   /** brief stoplight wait — pauses movement without changing state */
   waitUntil: number | null;
-  lights: { atM: number; waitSec: number }[];
+  lights: Stoplight[];
   nextLight: number;
   arrived: boolean;
   joinedScriptedStop: boolean;
@@ -401,43 +398,16 @@ function memberName(s: SimState, id: string): string {
   return s.members.get(id)?.seed.name ?? id;
 }
 
-/**
- * Plausible stoplight positions along a walking route: every sharp turn (a
- * real street corner) plus periodic candidates for straight-through
- * crossings, deduped to one per block. A seeded hash decides which lights
- * catch this walker red and for how long, so the pattern is stable across
- * re-renders but differs per member.
- */
-function findLights(route: LatLng[], cum: number[], seedId: string): { atM: number; waitSec: number }[] {
-  const total = cum[cum.length - 1];
-  const seedH = seedId.split('').reduce((h, c) => h * 31 + c.charCodeAt(0), 7);
-  const hash = (n: number) => {
-    let h = (n * 2654435761 + seedH * 97) >>> 0;
-    h ^= h >> 13;
-    return h % 100;
-  };
-
-  const candidates: number[] = [];
-  for (let i = 1; i < route.length - 1; i++) {
-    const turn = Math.abs(
-      ((bearingDeg(route[i], route[i + 1]) - bearingDeg(route[i - 1], route[i]) + 540) % 360) - 180
-    );
-    if (turn > 35) candidates.push(cum[i]);
-  }
-  for (let m = LIGHT_EVERY_M; m < total; m += LIGHT_EVERY_M) candidates.push(m);
-  candidates.sort((a, b) => a - b);
-
-  const lights: { atM: number; waitSec: number }[] = [];
-  for (const atM of candidates) {
-    if (atM < 40 || atM > total - 80) continue; // not right at the start or the arrival
-    if (lights.length && atM - lights[lights.length - 1].atM < LIGHT_MIN_GAP_M) continue;
-    const h = hash(Math.round(atM));
-    if (h < LIGHT_RED_PCT) {
-      lights.push({ atM, waitSec: LIGHT_MIN_WAIT_S + (h % LIGHT_WAIT_SPAN_S) });
-    }
-  }
-  return lights;
+/** Demo stand-in for sensed vertical position (real build: CLLocation.floor,
+ *  barometric altitude, and GPS-loss inference for subways). Exported for tests. */
+export function levelAt(
+  levelSpans: LevelSpan[] | undefined,
+  frac: number
+): { level: number | null; levelLabel?: string } {
+  const span = levelSpans?.find((s) => frac >= s.fromFrac && frac <= s.toFrac);
+  return span ? { level: span.level, levelLabel: span.label } : { level: null };
 }
+
 
 /** Distance along a route of its closest waypoint to a POI, or null if the POI isn't on this route. */
 function distanceAlongRoute(route: LatLng[], cum: number[], poi: LatLng): number | null {
@@ -488,6 +458,7 @@ function buildSnapshot(s: SimState): {
       mode,
       steps: mode === 'foot' ? Math.round((m.progressM - m.startM) / STRIDE_M) : 0,
       progress: m.totalM > 0 ? m.progressM / m.totalM : 1,
+      ...levelAt(m.seed.levelSpans, m.totalM > 0 ? m.progressM / m.totalM : 1),
       traveledM: m.progressM - m.startM,
       trail: routeSlice(m.route, m.cum, m.startM, m.progressM),
       statusNote: m.statusNote,
