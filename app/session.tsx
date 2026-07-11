@@ -16,6 +16,7 @@ import { TrailPath } from '../src/components/TrailPath';
 import { useClusters } from '../src/hooks/useClusters';
 import { SCENARIOS } from '../src/demo/data';
 import { SimMember, useSimulation } from '../src/demo/simulation';
+import { saveArchive } from '../src/lib/archive';
 import { UI } from '../src/lib/colors';
 import { summarizeConvergence } from '../src/lib/convergence';
 import { LatLng } from '../src/lib/geo';
@@ -49,6 +50,33 @@ export default function SessionScreen() {
   const endsAt = useRef(Date.now() + durationMin * 60_000);
 
   const inviteMessage = `Join my Arrival session “${sessionName}”: https://arrival.app/j/${joinCode}`;
+
+  // Archive on completion: the session freezes to the profile with every
+  // trace intact, viewable read-only from Home (F15).
+  const archivedRef = useRef(false);
+  useEffect(() => {
+    if (!sim.allArrived || archivedRef.current) return;
+    archivedRef.current = true;
+    saveArchive({
+      id: `session-${joinCode}`,
+      name: sessionName,
+      kind: params.kind ?? 'walk',
+      endedAt: Date.now(),
+      durationSec: Math.round(sim.elapsedSec),
+      destination: scenario.destination,
+      members: sim.members.map((m) => ({
+        id: m.id,
+        name: m.name,
+        color: m.color,
+        avatarKey: m.id,
+        mode: m.mode,
+        steps: m.steps,
+        traveledM: Math.round(m.traveledM),
+        trail: m.trail,
+      })),
+      arrivalOrder: sim.arrivalOrder,
+    }).catch(() => {});
+  }, [sim.allArrived]);
 
   // Camera: follow the selected member, otherwise auto-fit the whole crew.
   useEffect(() => {
