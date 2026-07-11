@@ -4,7 +4,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { formatEtaClock, formatLevel } from '../lib/geo';
+import { formatEtaClock, formatLevel } from '../lib/format';
 
 interface Props {
   member: SimMember;
