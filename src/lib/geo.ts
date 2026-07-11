@@ -105,6 +105,11 @@ export function headingAlongRoute(route: LatLng[], cum: number[], atM: number, l
   return bearingDeg(behind, ahead);
 }
 
+/** Floor relative to street as a compact chip label: -1 → "B1", 2 → "F2". */
+export function formatLevel(level: number): string {
+  return level < 0 ? `B${-level}` : `F${level}`;
+}
+
 /** Bearing → 8-wind compass direction ("NE"), for "0.4 mi NE of you" lines. */
 export function compassDir(bearing: number): string {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];

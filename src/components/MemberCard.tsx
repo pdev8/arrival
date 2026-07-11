@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { bearingDeg, compassDir, distanceM, formatDistance, formatEtaClock } from '../lib/geo';
+import { bearingDeg, compassDir, distanceM, formatDistance, formatEtaClock, formatLevel } from '../lib/geo';
 import { STATE_ICON } from '../lib/icons';
 import { DotRing } from './DotRing';
 import { Glass } from './Glass';
@@ -58,6 +58,13 @@ export function MemberCard({ member, you, onRetrace, onClose }: Props) {
           </View>
           {relative && (
             <Text style={[styles.relative, { color: member.color }]}>{relative}</Text>
+          )}
+          {member.level != null && (
+            <Text style={styles.level}>
+              {formatLevel(member.level)}
+              {member.levelLabel ? ` · ${member.levelLabel}` : ''} —{' '}
+              {member.level < 0 ? 'below street level' : 'above street level'}
+            </Text>
           )}
         </View>
         <View style={styles.etaCol}>
@@ -141,6 +148,7 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   status: { color: UI.textDim, fontSize: 12.5, flexShrink: 1 },
   relative: { fontSize: 12.5, fontWeight: '700', marginTop: 2 },
+  level: { color: UI.textDim, fontSize: 12, fontWeight: '600', marginTop: 2 },
   etaCol: { alignItems: 'flex-end' },
   eta: { fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
   etaLabel: { color: UI.textDim, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },

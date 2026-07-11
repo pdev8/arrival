@@ -50,6 +50,10 @@ export interface SimMember {
   steps: number;
   /** fraction of their route completed, 0..1 — drives the progress rings */
   progress: number;
+  /** floors relative to street (-1 = B1, 2 = F2), null when at street level */
+  level: number | null;
+  /** what the level is ("subway", "shops") when known */
+  levelLabel?: string;
   /** distance covered this session, meters */
   traveledM: number;
   /** the path traveled this session, for breadcrumb trails */
@@ -401,6 +405,14 @@ function memberName(s: SimState, id: string): string {
   return s.members.get(id)?.seed.name ?? id;
 }
 
+/** Demo stand-in for sensed vertical position (real build: CLLocation.floor,
+ *  barometric altitude, and GPS-loss inference for subways). */
+function levelAt(m: InternalMember): { level: number | null; levelLabel?: string } {
+  const frac = m.totalM > 0 ? m.progressM / m.totalM : 1;
+  const span = m.seed.levelSpans?.find((s) => frac >= s.fromFrac && frac <= s.toFrac);
+  return span ? { level: span.level, levelLabel: span.label } : { level: null };
+}
+
 /**
  * Plausible stoplight positions along a walking route: every sharp turn (a
  * real street corner) plus periodic candidates for straight-through
@@ -488,6 +500,7 @@ function buildSnapshot(s: SimState): {
       mode,
       steps: mode === 'foot' ? Math.round((m.progressM - m.startM) / STRIDE_M) : 0,
       progress: m.totalM > 0 ? m.progressM / m.totalM : 1,
+      ...levelAt(m),
       traveledM: m.progressM - m.startM,
       trail: routeSlice(m.route, m.cum, m.startM, m.progressM),
       statusNote: m.statusNote,

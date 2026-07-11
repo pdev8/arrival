@@ -17,6 +17,15 @@ export const CATEGORY_EMOJI: Record<StopCategory, string> = {
   other: '📍',
 };
 
+/** A stretch of a route spent off street level: subway, mall floor, garage… */
+export interface LevelSpan {
+  fromFrac: number;
+  toFrac: number;
+  /** floors relative to street: -1 = one below (B1), 2 = two above (F2) */
+  level: number;
+  label: string;
+}
+
 export interface MemberSeed {
   id: string;
   name: string;
@@ -28,6 +37,8 @@ export interface MemberSeed {
   startFrac: number;
   /** cruise speed, real m/s (~1.4 walking, ~30 driving) */
   cruiseMps: number;
+  /** demo stand-in for sensed floor changes (real build: CLLocation.floor + barometer) */
+  levelSpans?: LevelSpan[];
 }
 
 /** Demo profile photos, bundled locally so markers paint synchronously —
@@ -84,8 +95,10 @@ const WALK: Scenario = {
     { id: 'sarah', name: 'Sarah', avatar: AVATARS.sarah, color: MEMBER_PALETTE[3], isYou: false, routeKey: 'sarah', startFrac: 0.15, cruiseMps: 1.4 },
     { id: 'mike', name: 'Mike', avatar: AVATARS.mike, color: MEMBER_PALETTE[1], isYou: false, routeKey: 'mike', startFrac: 0.1, cruiseMps: 1.5 },
     { id: 'jess', name: 'Jess', avatar: AVATARS.jess, color: MEMBER_PALETTE[2], isYou: false, routeKey: 'jess', startFrac: 0.12, cruiseMps: 1.45 },
-    { id: 'alex', name: 'Alex', avatar: AVATARS.alex, color: MEMBER_PALETTE[4], isYou: false, routeKey: 'alex', startFrac: 0.05, cruiseMps: 1.5 },
-    { id: 'priya', name: 'Priya', avatar: AVATARS.priya, color: MEMBER_PALETTE[5], isYou: false, routeKey: 'priya', startFrac: 0.08, cruiseMps: 1.4 },
+    // Alex cuts through a shopping arcade one floor up; Priya rides two
+    // subway stops — demo stand-ins for sensed floor/underground transitions
+    { id: 'alex', name: 'Alex', avatar: AVATARS.alex, color: MEMBER_PALETTE[4], isYou: false, routeKey: 'alex', startFrac: 0.05, cruiseMps: 1.5, levelSpans: [{ fromFrac: 0.42, toFrac: 0.58, level: 1, label: 'shops' }] },
+    { id: 'priya', name: 'Priya', avatar: AVATARS.priya, color: MEMBER_PALETTE[5], isYou: false, routeKey: 'priya', startFrac: 0.08, cruiseMps: 1.4, levelSpans: [{ fromFrac: 0.3, toFrac: 0.62, level: -1, label: 'subway' }] },
     { id: 'noah', name: 'Noah', avatar: AVATARS.noah, color: MEMBER_PALETTE[6], isYou: false, routeKey: 'noah', startFrac: 0.03, cruiseMps: 1.55 },
   ],
   timeScale: 1, // real time — a walk across the Village takes as long as it takes
@@ -117,7 +130,8 @@ const ROADTRIP: Scenario = {
   // I-80/CA-89 corridors instead of straight-line hops. See routes.ts.
   routes: Object.fromEntries(Object.entries(DRIVE_ROUTES).map(([k, r]) => [k, pts(r)])),
   members: [
-    { id: 'you', name: 'You', avatar: AVATARS.you, color: MEMBER_PALETTE[0], isYou: true, routeKey: 'us50', startFrac: 0.2, cruiseMps: 31 },
+    // you finish in the underground garage at the lodge
+    { id: 'you', name: 'You', avatar: AVATARS.you, color: MEMBER_PALETTE[0], isYou: true, routeKey: 'us50', startFrac: 0.2, cruiseMps: 31, levelSpans: [{ fromFrac: 0.985, toFrac: 1, level: -2, label: 'parking garage' }] },
     { id: 'sarah', name: 'Sarah', avatar: AVATARS.sarah, color: MEMBER_PALETTE[3], isYou: false, routeKey: 'us50', startFrac: 0.55, cruiseMps: 30 },
     { id: 'mike', name: 'Mike', avatar: AVATARS.mike, color: MEMBER_PALETTE[1], isYou: false, routeKey: 'us50', startFrac: 0.31, cruiseMps: 33 },
     { id: 'jess', name: 'Jess', avatar: AVATARS.jess, color: MEMBER_PALETTE[2], isYou: false, routeKey: 'i80', startFrac: 0.3, cruiseMps: 32 },
