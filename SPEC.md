@@ -55,6 +55,8 @@ Tracking is **position-based and session-scoped**: as long as you've joined an a
 | F13 | **Step counts** | For members on foot, steps are derived from distance walked (~0.75 m stride). Your live count sits in the session header; every walker's count shows in their member row. Drivers show the join code / no steps. |
 | F14 | **Vertical awareness** | The map is flat; groups aren't. Each member carries a floor relative to street level (B2…B1 / F1…Fn) shown as a chip on their marker tag and a line in their card ("B1 · subway — below street level"). Demo simulates level spans along routes; the real build senses it via `CLLocation.floor` (venue-mapped buildings), barometric altitude (`CMAltimeter`/pressure sensor) calibrated at session start, and GPS-loss + station-geofence inference for subways. Use cases: malls, parking garages, stadiums, ski lifts, trail elevation. |
 
+| F15 | **Session archive** | When a session completes it freezes to your profile: every member's full trace, steps, distance, arrival order. Home lists archived sessions; opening one is a **read-only view** — all traces drawn in member colors on a deliberately **decluttered map** (POIs/shops/transit labels stripped so the traces are the content), final positions as avatar pins, and a stats strip. Local-first (AsyncStorage) in the demo; syncs with the M1 backend. |
+
 ### 3.2 Explicitly out of scope for v1
 - Turn-by-turn navigation or route rendering of *other members'* planned routes (we show positions + ETAs, not their route lines).
 - In-app chat (the feed + stop notes cover coordination; chat is a v2 candidate).
