@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  typecheck:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,3 +16,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
+      - run: npx eslint .
+      - run: npx jest --ci

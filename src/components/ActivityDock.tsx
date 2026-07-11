@@ -12,8 +12,7 @@ import {
 } from 'react-native';
 import { FeedEvent, SimMember, Simulation } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { formatDistance } from '../lib/format';
-import { timeAgo } from '../lib/format';
+import { formatDistance, timeAgo } from '../lib/format';
 import { Glass } from './Glass';
 import { StopCard } from './StopCard';
 
