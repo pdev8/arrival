@@ -82,18 +82,18 @@ function MemberMarkerInner({ member, mapHeading = 0, selected, hidden = false, o
           </View>
         </View>
         <View style={styles.tag}>
+          {/* tag reads: name · time · level · pause */}
           <Text style={styles.tagName}>{member.name}</Text>
+          <Text style={[styles.tagEta, { color: member.color }]}>
+            {member.state === 'arrived' ? 'here' : formatEtaClock(member.etaMin)}
+          </Text>
           {/* off street level: B1 / F2 chip so verticality reads on the map */}
           {member.level != null && (
             <Text style={styles.tagLevel}>{formatLevel(member.level)}</Text>
           )}
-          {/* paused reads inside the timer itself: ❚❚ next to the frozen clock */}
           {member.state === 'stopped' && (
             <MaterialCommunityIcons name="pause" size={10} color={member.color} />
           )}
-          <Text style={[styles.tagEta, { color: member.color }]}>
-            {member.state === 'arrived' ? 'here' : formatEtaClock(member.etaMin)}
-          </Text>
         </View>
       </View>
     </Marker>
