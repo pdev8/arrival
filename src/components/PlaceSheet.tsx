@@ -77,7 +77,9 @@ export function PlaceSheet({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
+  // invisible tap-to-close catcher — no dim: the map stays fully visible
+  // above the sheet (the dim itself read as a ghost panel)
+  backdrop: { flex: 1 },
   // flush bottom sheet — matches InviteSheet's anchoring
   wrap: {},
   sheet: {
