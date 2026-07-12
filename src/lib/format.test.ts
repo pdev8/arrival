@@ -5,7 +5,11 @@ describe('formatEtaClock', () => {
     expect(formatEtaClock(5.5)).toBe('5:30');
   });
   it('renders hours past 60 minutes', () => {
-    expect(formatEtaClock(75)).toBe('1:15:00');
+    expect(formatEtaClock(75)).toBe('1:15 hr');
+  });
+  it('flips to hr format only past 59:59', () => {
+    expect(formatEtaClock(59.99)).toBe('59:59');
+    expect(formatEtaClock(60)).toBe('1:00 hr');
   });
   it('clamps negatives to zero', () => {
     expect(formatEtaClock(-3)).toBe('0:00');
