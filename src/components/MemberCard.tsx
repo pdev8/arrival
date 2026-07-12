@@ -7,6 +7,7 @@ import { compassDir, formatDistance, formatEtaClock, formatLevel, statusLine } f
 import { bearingDeg, distanceM } from '../lib/geo';
 import { STATE_ICON } from '../lib/icons';
 import { AvatarRing } from './AvatarRing';
+import { filledDots } from './DotRing';
 import { Glass } from './Glass';
 import { MEMBER_SURFACE_H } from './MemberRail';
 import { WalkingIcon } from './WalkingIcon';
@@ -26,7 +27,7 @@ interface Props {
  * state (departed, arrived, long name) changes the footprint: every text
  * line truncates instead of wrapping.
  */
-export function MemberCard({ member, you, onRetrace, onClose }: Props) {
+function MemberCardInner({ member, you, onRetrace, onClose }: Props) {
   const arrived = member.state === 'arrived';
 
   const relative =
@@ -89,6 +90,30 @@ export function MemberCard({ member, you, onRetrace, onClose }: Props) {
     </Glass>
   );
 }
+
+/**
+ * Memoized on what the card actually draws. The pager mounts one card per
+ * member and the sim ticks at 4 Hz, so without this every tick re-renders
+ * every page. The relative-bearing line moves with either position, hence
+ * both are in the comparator; callbacks are stable (useCallback upstream).
+ */
+export const MemberCard = React.memo(
+  MemberCardInner,
+  (prev, next) =>
+    prev.member.id === next.member.id &&
+    prev.member.name === next.member.name &&
+    prev.member.color === next.member.color &&
+    prev.member.state === next.member.state &&
+    prev.member.left === next.member.left &&
+    prev.member.statusNote === next.member.statusNote &&
+    prev.member.level === next.member.level &&
+    prev.member.steps === next.member.steps &&
+    Math.round(prev.member.remainingM) === Math.round(next.member.remainingM) &&
+    Math.round(prev.member.etaMin * 60) === Math.round(next.member.etaMin * 60) &&
+    filledDots(prev.member.progress, 16) === filledDots(next.member.progress, 16) &&
+    prev.member.pos === next.member.pos &&
+    prev.you?.pos === next.you?.pos
+);
 
 const styles = StyleSheet.create({
   card: {
