@@ -32,9 +32,13 @@ record; this is what you must not regress.
   protrudes past the point. Idle relaxes to a circle. "You" looks like everyone
   else (halo retired). Paused = ❚❚ glyph inside the timer text (tag chip +
   rail ETA) — never rings or badges on the puck.
-- NEVER unmount a marker containing a photo to hide it — remounts flash the
-  image. Keep it mounted and set `opacity={0}` (that's how clustering works in
-  `app/session.tsx`).
+- Clustered members are conditionally RENDERED, never opacity-hidden. The old
+  opacity trick existed for remote photos (remount = flash); avatars are local
+  now, so remounts are invisible — and rn-maps #5911 (Apple Maps + New Arch)
+  drops marker views on prop flips, so the fewer prop changes a mounted
+  marker sees, the better. Keep the clustering INPUT stable across selection
+  and carve the selected member out at render time (`clusterVisibility` in
+  lib/clusters).
 - Demo avatars are bundled local assets (`assets/avatars/`); don't switch back
   to remote URLs in markers.
 
