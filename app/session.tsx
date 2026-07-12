@@ -27,8 +27,10 @@ import { navigateTo } from '../src/lib/nav-deeplinks';
 
 const FIT_PADDING = { top: 130, right: 60, bottom: 320, left: 60 };
 const TRAIL_PADDING = { top: 150, right: 70, bottom: 340, left: 70 };
-/** follow-mode zoom per scenario kind */
+/** follow-mode zoom per scenario kind (Google provider reads zoom…) */
 const FOLLOW_ZOOM: Record<string, number> = { walk: 16.5, roadtrip: 11, mall: 18 };
+/** …but Apple Maps ignores camera.zoom and wants altitude (meters) */
+const FOLLOW_ALTITUDE: Record<string, number> = { walk: 1400, roadtrip: 90000, mall: 500 };
 
 export default function SessionScreen() {
   const router = useRouter();
@@ -92,7 +94,11 @@ export default function SessionScreen() {
     if (!map) return;
     const selected = sim.members.find((m) => m.id === selectedId);
     if (selected && follow) {
-      map.setCamera({ center: selected.pos, zoom: FOLLOW_ZOOM[scenario.key] ?? 16 });
+      map.setCamera({
+        center: selected.pos,
+        zoom: FOLLOW_ZOOM[scenario.key] ?? 16,
+        altitude: FOLLOW_ALTITUDE[scenario.key] ?? 1400,
+      });
     } else if (!selectedId && autoFit) {
       if (fitCounter.current++ % 4 === 0) {
         map.fitToCoordinates(
@@ -112,7 +118,13 @@ export default function SessionScreen() {
       .catch(() => {});
   };
 
-  const clusters = useClusters(sim.members, region);
+  // the selected member renders as their own puck — keep them out of the
+  // facepiles or they'd appear twice while followed from a zoomed-out view
+  const clusterable = useMemo(
+    () => sim.members.filter((m) => m.id !== selectedId),
+    [sim.members, selectedId]
+  );
+  const clusters = useClusters(clusterable, region);
   const clusteredIds = useMemo(
     () =>
       new Set(
