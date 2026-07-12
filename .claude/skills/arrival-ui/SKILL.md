@@ -63,16 +63,48 @@ record; this is what you must not regress.
 - `tracksViewChanges` is a NO-OP on Apple Maps (iOS-Google-only) — don't
   reach for it as a fix on this stack.
 
-## Marker stability doctrine
+## Marker stability doctrine — settled by four rounds of device testing
 
-- Apple Maps has no annotation-view reuse; every custom marker is a live view
-  tree. Keep the marker census small (members + clusters + stops + flag) and
-  IDs stable; never mass-mount/unmount markers in one commit.
-- Cluster regrouping is throttled in session.tsx (2.5 s / >25% threshold
-  change) because 4 Hz membership flapping remounted facepile photos. Keep
-  the throttle if you touch clustering.
-- `newArchEnabled: false` in app.json mitigates #5911 for dev builds (Expo Go
-  cannot opt out — use a dev build to validate marker stability).
+The root pattern, learned the hard way: **on Expo Go's New Architecture,
+Apple Maps loses custom marker views on ANY lifecycle event** — opacity flip,
+mount, unmount, or key-change remount (rn-maps #5911). Every "fix" that just
+moved the churn around failed on device. What actually works:
+
+- **Zero lifecycle churn in live sessions.** No clustering there: each puck
+  mounts once at roster load and never unmounts, hides, or remounts. Facepiles
+  are demo-only (simulated members, never dropped).
+- **Stable keys. Never remount as a "self-heal."** A `-sel` key suffix was
+  added to repaint markers across selection — it caused a 90%-reproducible
+  blink on every Close, because a freshly inserted marker doesn't paint until
+  its NEXT prop update (which arrived with the 3 s position packet — hence
+  "it comes back after 3-5 seconds").
+- **`repaintTick` instead**: a prop that changes every 5 s breaks each marker's
+  memo, guaranteeing a periodic prop nudge that repaints any view iOS lost
+  anyway. Cheap at this member count; keep it.
+- Selection may change only cheap props (border width). Keep the marker census
+  small and IDs stable; never mass-mount/unmount markers in one commit.
+- Cluster regrouping (demo) is throttled in session.tsx (2.5 s / >25% change)
+  because 4 Hz membership flapping remounted facepile photos.
+- `newArchEnabled: false` in app.json means **real dev builds don't have this
+  bug class at all** — Expo Go can't opt out. `npx expo run:ios --device` is
+  the definitive validation environment (roadmap T2).
+
+## Bottom surfaces
+
+- Sheets (invite, place) anchor **flush**: full-bleed, past the screen bottom,
+  bottom corners squared — only the top corners round. **No backdrop dim**:
+  the 30% dim WAS the "ghost panel" the user kept seeing above the sheet. The
+  backdrop stays invisible and tap-to-close. The activity dock follows the
+  same anchoring.
+- The member surface has ONE fixed height (`MEMBER_SURFACE_H`, exported from
+  MemberRail) shared by the rail chips and the full-width card, so swapping
+  between them never shifts layout. No member state (departed, arrived, long
+  name) may change the footprint — every text line is `numberOfLines={1}` and
+  truncates. Sizing asks ("+10%") scale the spatial knobs, not the fonts.
+- The card deck is a pager (`MemberPager`): order is you → fastest ETA →
+  departed last (`sortMembers` in lib/roster), shared with the rail. The deck
+  order FREEZES while open — live ETAs cross constantly and reordering pages
+  mid-swipe is disorienting.
 
 ## Transforms & animation
 
