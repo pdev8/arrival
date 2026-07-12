@@ -8,6 +8,13 @@ import { AvatarRing } from './AvatarRing';
 import { filledDots } from './DotRing';
 import { Glass } from './Glass';
 
+/**
+ * Shared fixed height of the bottom member surface: the rail of chips and
+ * the full-width member card both lock to this, so swapping between them
+ * (and any member state — departed, arrived, long name) never shifts layout.
+ */
+export const MEMBER_SURFACE_H = 96;
+
 interface Props {
   members: SimMember[];
   selectedId: string | null;
@@ -83,7 +90,7 @@ const RailChip = React.memo(
 const styles = StyleSheet.create({
   rail: { flexGrow: 0 },
   row: { gap: 8, paddingHorizontal: 12 },
-  chip: { alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, width: 74 },
+  chip: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, width: 74, height: MEMBER_SURFACE_H },
   chipSelected: { borderColor: 'rgba(255,255,255,0.55)' },
   name: { color: UI.text, fontSize: 11, fontWeight: '700', marginTop: 5 },
   etaRow: { flexDirection: 'row', alignItems: 'center', gap: 1, marginTop: 1 },
