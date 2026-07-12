@@ -126,6 +126,27 @@ You said it yourself: it needs to work flawlessly. This epic locks in the marker
 
 ---
 
+## F — Field-test fixes *(P0)*
+
+Everything the two-phone hardware tests turned up. None of it was on the plan;
+all of it was a real defect or a gap the demo hid. Numbered so each fix stays
+traceable to the PR that shipped it.
+
+| # | Slice | What | Size | Status |
+|---|---|---|---|---|
+| **F1** | `fix/live-roster-resilience` | Host saw "someone joined" but no puck. Layered delivery so no single realtime path failure blinds anyone: broadcast (3s) → fresher-wins snapshot merge (10s) → trip_members UPDATE subscription → 15s roster poll; unknown-sender recovery; send failures surfaced once. | M | **Shipped** ([PR #24](https://github.com/pdev8/arrival/pull/24)) |
+| **F2** | `fix/select-zoom` | Tapping a chip while zoomed out added a duplicate puck instead of zooming — Apple Maps ignores `camera.zoom`, it needs `altitude`. | S | **Shipped** ([PR #25](https://github.com/pdev8/arrival/pull/25)) |
+| **F3** | `feat/invite-copy-link` | Invite panel: big tappable join code, Copy-link primary with "Copied ✓" feedback, Share… secondary. | S | **Shipped** ([PR #26](https://github.com/pdev8/arrival/pull/26)) |
+| **F4** | `fix/sheet-anchoring` | Ghost panel above the invite sheet, three rounds: flush anchoring, then hiding dock/rail/fabs, then the actual culprit — the 30% backdrop dim itself. Sheets now rise over the map with an invisible tap-to-close backdrop. | S | **Shipped** ([PR #27](https://github.com/pdev8/arrival/pull/27), [#28](https://github.com/pdev8/arrival/pull/28), [#29](https://github.com/pdev8/arrival/pull/29)) |
+| **F5** | `feat/departure-semantics` | Members never fall off the map: leaving marks `left_at` (migration 0004 + `on_member_left` trigger) instead of deleting. Departed members freeze dimmed at their last known position, show "left", are excluded from convergence, and their trails flow into the archive. | M | **Shipped** ([PR #30](https://github.com/pdev8/arrival/pull/30)) |
+| **F6** | `fix/marker-drops` | Four takes against rn-maps #5911 (Apple Maps + New Arch loses custom marker views on ANY lifecycle event). Removed opacity flips + selection-driven regrouping; removed the `-sel` remount "self-heal" that caused the 3–5s blink on Close; finally killed churn entirely — live sessions skip clustering (pucks mount once, never unmount/hide) and a 5s `repaintTick` nudges natively-lost views back. Verified on device. | L | **Shipped** ([PR #31](https://github.com/pdev8/arrival/pull/31), [#32](https://github.com/pdev8/arrival/pull/32)) |
+| **F7** | `ui/uniform-member-surface` | Rail chips and the full-width card share one fixed height (`MEMBER_SURFACE_H`); no member state or name length changes the footprint. ETA reads `m:ss` → `1:15 hr` past an hour → `5.1 days` past a day. Surfaces +10% after device feedback. | M | **Shipped** ([PR #34](https://github.com/pdev8/arrival/pull/34)) |
+| **F8** | `feat/member-pager` | Detail view is a swipeable card deck: swipe between members, each landing focuses them (camera follows). Order: you → fastest ETA → departed last, shared with the rail via `sortMembers`. Rail ⇄ deck cross-fades; deck order freezes while open. | M | **Shipped** ([PR #35](https://github.com/pdev8/arrival/pull/35)) |
+| **F9** | `ui/dock-flush` | Activity dock spans edge-to-edge and sits flush on the screen bottom (bottom corners squared, matching the invite sheet); expanding it springs the member surface out of view. | S | **Shipped** ([PR #36](https://github.com/pdev8/arrival/pull/36)) |
+| **F10** | `chore/refactor-tests` | Live motion logic (fresher-wins snapshot merge, broadcast apply, tracked → SimMember mapping) extracted from `useLiveTrip` into pure, tested helpers (`mergeSnapshot`, `applyBroadcast`, `simMotion`); `MemberCard` memoized so the 4 Hz tick stops re-rendering every deck page. 181 tests. | M | Branch — awaiting device pass |
+
+---
+
 ## Acceptance criteria
 
 Each task's acceptance criteria live in the artifact (expand the task) and in
