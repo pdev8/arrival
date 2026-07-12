@@ -13,7 +13,7 @@ import { Glass } from './Glass';
  * the full-width member card both lock to this, so swapping between them
  * (and any member state — departed, arrived, long name) never shifts layout.
  */
-export const MEMBER_SURFACE_H = 96;
+export const MEMBER_SURFACE_H = 106;
 
 interface Props {
   members: SimMember[];
@@ -56,8 +56,8 @@ const RailChip = React.memo(
           <AvatarRing
             source={m.avatar}
             name={m.name}
-            size={48}
-            avatarSize={36}
+            size={53}
+            avatarSize={40}
             progress={m.progress}
             color={m.color}
             arrived={arrived}
@@ -90,7 +90,7 @@ const RailChip = React.memo(
 const styles = StyleSheet.create({
   rail: { flexGrow: 0 },
   row: { gap: 8, paddingHorizontal: 12 },
-  chip: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, width: 74, height: MEMBER_SURFACE_H },
+  chip: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, width: 81, height: MEMBER_SURFACE_H },
   chipSelected: { borderColor: 'rgba(255,255,255,0.55)' },
   name: { color: UI.text, fontSize: 11, fontWeight: '700', marginTop: 5 },
   etaRow: { flexDirection: 'row', alignItems: 'center', gap: 1, marginTop: 1 },

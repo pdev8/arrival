@@ -11,6 +11,10 @@ describe('formatEtaClock', () => {
     expect(formatEtaClock(59.99)).toBe('59:59');
     expect(formatEtaClock(60)).toBe('1:00 hr');
   });
+  it('shows days past 24 hr', () => {
+    expect(formatEtaClock(24 * 60)).toBe('24:00 hr');
+    expect(formatEtaClock(5.1 * 24 * 60)).toBe('5.1 days');
+  });
   it('clamps negatives to zero', () => {
     expect(formatEtaClock(-3)).toBe('0:00');
   });

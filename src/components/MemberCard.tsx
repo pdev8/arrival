@@ -40,8 +40,8 @@ export function MemberCard({ member, you, onRetrace, onClose }: Props) {
         <AvatarRing
           source={member.avatar}
           name={member.name}
-          size={46}
-          avatarSize={34}
+          size={51}
+          avatarSize={37}
           progress={member.progress}
           color={member.color}
           arrived={arrived}
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 11,
     height: MEMBER_SURFACE_H,
     justifyContent: 'space-between',
   },
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: '#fff',
     borderRadius: 11,
-    paddingVertical: 5,
+    paddingVertical: 6,
   },
   actionPrimaryText: { color: UI.bg, fontSize: 12.5, fontWeight: '700' },
   actionGhost: {

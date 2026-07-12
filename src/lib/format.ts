@@ -2,12 +2,13 @@
 
 /**
  * ETA as a live countdown clock: m:ss under an hour; past 59:59 it switches
- * to h:mm with an explicit "hr" unit ("1:15 hr") — the unit is what keeps it
- * from being misread as minutes:seconds, and h:mm:ss was too wide for the
- * fixed-height member surfaces.
+ * to h:mm with an explicit "hr" unit ("1:15 hr") so it can't be misread as
+ * minutes:seconds; past 24 hr it's just days ("5.1 days"). Full h:mm:ss was
+ * too wide for the fixed-height member surfaces.
  */
 export function formatEtaClock(minutes: number): string {
   const totalSec = Math.max(0, Math.round(minutes * 60));
+  if (totalSec > 24 * 3600) return `${(totalSec / 86400).toFixed(1)} days`;
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
