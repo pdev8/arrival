@@ -82,7 +82,9 @@ export function InviteSheet({ visible, sessionName, joinCode, onClose }: Props) 
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
+  // invisible tap-to-close catcher — no dim: the map stays fully visible
+  // above the sheet (the dim itself read as a ghost panel)
+  backdrop: { flex: 1 },
   // flush bottom sheet: full width, bottom edge (and its corners/border)
   // pushed well past the screen so only the top corners read as rounded
   wrap: {},
