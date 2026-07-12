@@ -8,8 +8,8 @@ good. To stand up the real thing:
 
 1. **Create the project**: supabase.com → New project (free tier). Pick a
    region near your testers.
-2. **Apply the migration**: Dashboard → SQL Editor → paste
-   `supabase/migrations/0001_core_schema.sql` → Run.
+2. **Apply the migrations in order**: Dashboard → SQL Editor → run every file
+   in `supabase/migrations/` by filename (`0001`, then `0002`, and so on).
    (Or with the CLI: `supabase link --project-ref <ref>` then `supabase db push`.)
 3. **Enable anonymous sign-ins**: Dashboard → Authentication → Providers →
    Anonymous → enable. (M1 identity; Apple/Google upgrade in the A epic.)
@@ -43,9 +43,15 @@ the demo simulation untouched.
 - **Expiry**: `complete_expired_trips()` flips overdue sessions; clients
   hard-stop tracking on the status change (SPEC §5.6).
 
-## What rides on top (next PRs)
+## Current implementation state
 
-- **B2** session create/join wired to the RPCs behind `supabaseConfigured`.
-- **B4** realtime: broadcast channel `trip:{id}` for 4 Hz positions +
-  `postgres_changes` on stops/votes/events; 30–60 s snapshot upserts.
-- **B5** background location (needs a dev build + device).
+- **B2 complete**: session create/join is wired to the RPCs behind
+  `supabaseConfigured`.
+- **B4 complete**: private `trip:{id}` realtime broadcast carries foreground
+  positions every 3 seconds; roster/events use `postgres_changes`; the client
+  persists a last-known snapshot every 30 seconds.
+- **Next intended slice: B6**: live stops, votes, participants, and reactions.
+- **Still pending: B5** background/adaptive location tracking (dev build +
+  physical-device validation required).
+
+See `docs/PROJECT_STATE.md` for the complete handoff.

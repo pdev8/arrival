@@ -2,11 +2,16 @@
 
 Road-trip convoy coordination. Full product spec in [SPEC.md](SPEC.md).
 
-This is the **M0 demo**: start a session, get a Meet-style invite link, and watch a
-simulated 4-member group (you, Sarah, Mike, Jess) converge on a top-down map — complete
-with a stop announcement, a suggestion you can vote on, arrival events, and a live feed.
-No backend yet; members are simulated locally at accelerated speed so a session plays
-out in ~3 minutes.
+The app currently has two paths:
+
+- A polished **M0 demo** with simulated members, scripted stops/votes, trails,
+  arrival recap, and local session archives.
+- An early **M1 live path** behind Supabase environment variables: anonymous
+  identity, session create/join, private realtime foreground positions, roster
+  updates, last-known snapshots, and a live event feed. Live stops/votes and
+  background tracking are not implemented yet.
+
+See [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) for the exact handoff point.
 
 Two scenarios, picked by session kind on the create screen:
 - **Hangout (default):** walking through Greenwich Village to Washington Square Park —
@@ -21,7 +26,9 @@ npm install
 npx expo start
 ```
 
-Scan the QR code with **Expo Go** (iOS: Camera app / Android: Expo Go app).
+For quick demo work, scan the QR code with **Expo Go** (iOS: Camera app /
+Android: Expo Go app). Validate map-marker stability in a development build;
+Expo Go cannot honor this project's `newArchEnabled: false` setting.
 
 ## Try in the demo
 
