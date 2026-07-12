@@ -1,10 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Share, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
 import { ActivityDock, DOCK_PEEK } from '../src/components/ActivityDock';
 import { ClusterMarker } from '../src/components/ClusterMarker';
 import { DestinationMarker } from '../src/components/DestinationMarker';
+import { InviteSheet } from '../src/components/InviteSheet';
 import { MapFabs } from '../src/components/MapFabs';
 import { MemberCard } from '../src/components/MemberCard';
 import { MemberMarker } from '../src/components/MemberMarker';
@@ -54,12 +55,11 @@ export default function SessionScreen() {
   const [follow, setFollow] = useState(false);
   const [showTrails, setShowTrails] = useState(false);
   const [placePick, setPlacePick] = useState<LatLng | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [mapHeading, setMapHeading] = useState(0);
   const [region, setRegion] = useState<Region>(scenario.initialRegion as Region);
   const fitCounter = useRef(0);
   const endsAt = useRef(Date.now() + durationMin * 60_000);
-
-  const inviteMessage = `Join my Arrival session “${sessionName}”: https://arrival.app/j/${joinCode}`;
 
   // Archive on completion: the session freezes to the profile with every
   // trace intact, viewable read-only from Home (F15).
@@ -247,7 +247,7 @@ export default function SessionScreen() {
         sub={headerSub}
         highlightSub={sim.allArrived}
         onBack={() => router.replace('/')}
-        onInvite={() => Share.share({ message: inviteMessage }).catch(() => {})}
+        onInvite={() => setInviteOpen(true)}
       />
 
       <MapFabs
@@ -277,6 +277,13 @@ export default function SessionScreen() {
       </View>
 
       <ActivityDock sim={sim} sessionName={sessionName} destinationName={scenario.destination.name} />
+
+      <InviteSheet
+        visible={inviteOpen}
+        sessionName={sessionName}
+        joinCode={joinCode}
+        onClose={() => setInviteOpen(false)}
+      />
 
       <PlaceSheet
         pos={placePick}
