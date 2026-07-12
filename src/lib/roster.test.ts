@@ -1,4 +1,4 @@
-import { rosterPile } from './roster';
+import { rosterPile, sortMembers } from './roster';
 
 const members = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => ({ id }));
 
@@ -37,5 +37,23 @@ describe('rosterPile', () => {
   it('ignores a selected id that is not in the roster', () => {
     const { shown } = rosterPile(members, 'zzz', 5);
     expect(shown.map((m) => m.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+});
+
+describe('sortMembers', () => {
+  const m = (id: string, etaMin: number, left?: boolean) => ({ id, etaMin, left });
+  it('puts you first, fastest next, departed last', () => {
+    const order = sortMembers(
+      [m('a', 9), m('you', 20), m('b', 3, true), m('c', 5), m('d', 1)],
+      'you'
+    ).map((x) => x.id);
+    expect(order).toEqual(['you', 'd', 'c', 'a', 'b']);
+  });
+  it('you stays first even when slowest', () => {
+    expect(sortMembers([m('a', 1), m('you', 99)], 'you')[0].id).toBe('you');
+  });
+  it('multiple departed keep eta order at the end', () => {
+    const order = sortMembers([m('a', 5, true), m('b', 2, true), m('c', 3)], 'you').map((x) => x.id);
+    expect(order).toEqual(['c', 'b', 'a']);
   });
 });
