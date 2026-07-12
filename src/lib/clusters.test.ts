@@ -1,4 +1,4 @@
-import { centerOf, groupByProximity } from './clusters';
+import { centerOf, clusterVisibility, groupByProximity } from './clusters';
 
 const at = (latitude: number, longitude: number) => ({ pos: { latitude, longitude } });
 
@@ -32,5 +32,46 @@ describe('groupByProximity', () => {
 
   it('handles an empty list', () => {
     expect(groupByProximity([], 100)).toEqual([]);
+  });
+});
+
+describe('clusterVisibility', () => {
+  const g = (ids: string[], lat = 40.73) => ({
+    members: ids.map((id) => ({ id, pos: { latitude: lat, longitude: -74 } })),
+    center: { latitude: lat, longitude: -74 },
+  });
+
+  it('hides members behind piles of two or more', () => {
+    const { hiddenIds, piles } = clusterVisibility([g(['a', 'b']), g(['c'])], null);
+    expect([...hiddenIds].sort()).toEqual(['a', 'b']);
+    expect(piles).toHaveLength(1);
+  });
+
+  it('carves the selected member out of their pile', () => {
+    const { hiddenIds, piles } = clusterVisibility([g(['a', 'b', 'c'])], 'b');
+    expect(hiddenIds.has('b')).toBe(false);
+    expect([...hiddenIds].sort()).toEqual(['a', 'c']);
+    expect(piles[0].members.map((m) => m.id).sort()).toEqual(['a', 'c']);
+  });
+
+  it('dissolves a pair when one of them is selected — both render solo', () => {
+    const { hiddenIds, piles } = clusterVisibility([g(['a', 'b'])], 'a');
+    expect(hiddenIds.size).toBe(0);
+    expect(piles).toHaveLength(0);
+  });
+
+  it('recenters the pile on its visible members', () => {
+    const groups = [
+      {
+        members: [
+          { id: 'a', pos: { latitude: 40.7, longitude: -74 } },
+          { id: 'b', pos: { latitude: 40.8, longitude: -74 } },
+          { id: 'sel', pos: { latitude: 41.5, longitude: -74 } },
+        ],
+        center: { latitude: 41, longitude: -74 },
+      },
+    ];
+    const { piles } = clusterVisibility(groups, 'sel');
+    expect(piles[0].center.latitude).toBeCloseTo(40.75, 6);
   });
 });

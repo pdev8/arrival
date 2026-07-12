@@ -15,6 +15,7 @@ import { SessionHeader } from '../src/components/SessionHeader';
 import { StopPin } from '../src/components/StopPin';
 import { TrailPath } from '../src/components/TrailPath';
 import { useClusters } from '../src/hooks/useClusters';
+import { clusterVisibility } from '../src/lib/clusters';
 import { SCENARIOS } from '../src/demo/data';
 import { SimMember, useSimulation } from '../src/demo/simulation';
 import { useLiveTrip } from '../src/live/useLiveTrip';
@@ -119,19 +120,13 @@ export default function SessionScreen() {
       .catch(() => {});
   };
 
-  // the selected member renders as their own puck — keep them out of the
-  // facepiles or they'd appear twice while followed from a zoomed-out view
-  const clusterable = useMemo(
-    () => sim.members.filter((m) => m.id !== selectedId),
-    [sim.members, selectedId]
-  );
-  const clusters = useClusters(clusterable, region);
-  const clusteredIds = useMemo(
-    () =>
-      new Set(
-        clusters.filter((c) => c.members.length > 1).flatMap((c) => c.members.map((m) => m.id))
-      ),
-    [clusters]
+  // grouping input stays STABLE across selection (regrouping per tap churned
+  // marker props → #5911 drops); the selected member is carved out of the
+  // facepiles at render time instead
+  const clusters = useClusters(sim.members, region);
+  const { hiddenIds, piles } = useMemo(
+    () => clusterVisibility(clusters, selectedId),
+    [clusters, selectedId]
   );
 
   const remaining = Math.max(0, endsAt.current - Date.now());
@@ -214,26 +209,22 @@ export default function SessionScreen() {
           />
         ))}
 
-        {/* every member marker stays mounted for the whole session — markers
-            riding in a cluster go transparent instead of unmounting, so their
-            photos never remount (remounts were the avatar flash on zoom) */}
-        {sim.members.map((m) => (
-          <MemberMarker
-            // '-sel' in the key: selection transitions REMOUNT the affected
-            // markers — a self-heal for Apple Maps + New Arch natively
-            // dropping marker views on rapid prop flips (rn-maps #5911),
-            // which Expo Go can't run our old-arch mitigation against
-            key={`${m.id}${m.id === selectedId ? '-sel' : ''}`}
-            member={m}
-            mapHeading={mapHeading}
-            selected={m.id === selectedId}
-            hidden={clusteredIds.has(m.id) && m.id !== selectedId}
-            onPress={() => select(m.id)}
-          />
-        ))}
-        {clusters
-          .filter((c) => c.members.length > 1)
-          .map((c) => (
+        {/* clustered members are NOT mounted (conditional render, no opacity
+            flips): avatars are local so remounts are flash-free, and a
+            freshly mounted view can't be a #5911-dropped one. '-sel' in the
+            key remounts markers across selection transitions as a self-heal. */}
+        {sim.members
+          .filter((m) => !hiddenIds.has(m.id))
+          .map((m) => (
+            <MemberMarker
+              key={`${m.id}${m.id === selectedId ? '-sel' : ''}`}
+              member={m}
+              mapHeading={mapHeading}
+              selected={m.id === selectedId}
+              onPress={() => select(m.id)}
+            />
+          ))}
+        {piles.map((c) => (
             <ClusterMarker
               key={c.members.map((m) => m.id).join('-')}
               members={c.members}
@@ -251,7 +242,7 @@ export default function SessionScreen() {
                 );
               }}
             />
-          ))}
+        ))}
       </MapView>
 
       <SessionHeader
