@@ -1,13 +1,13 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { LayoutAnimation, StyleSheet, View } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
 import { ActivityDock, DOCK_PEEK } from '../src/components/ActivityDock';
 import { ClusterMarker } from '../src/components/ClusterMarker';
 import { DestinationMarker } from '../src/components/DestinationMarker';
 import { InviteSheet } from '../src/components/InviteSheet';
 import { MapFabs } from '../src/components/MapFabs';
-import { MemberCard } from '../src/components/MemberCard';
+import { MemberPager } from '../src/components/MemberPager';
 import { MemberMarker } from '../src/components/MemberMarker';
 import { MemberRail } from '../src/components/MemberRail';
 import { PlaceSheet } from '../src/components/PlaceSheet';
@@ -27,6 +27,7 @@ import { UI } from '../src/lib/colors';
 import { summarizeConvergence } from '../src/lib/convergence';
 import { LatLng } from '../src/lib/geo';
 import { navigateTo } from '../src/lib/nav-deeplinks';
+import { sortMembers } from '../src/lib/roster';
 
 const FIT_PADDING = { top: 130, right: 60, bottom: 320, left: 60 };
 const TRAIL_PADDING = { top: 150, right: 70, bottom: 340, left: 70 };
@@ -150,12 +151,46 @@ export default function SessionScreen() {
     (you && you.mode === 'foot' && you.steps > 0 ? ` · ${you.steps.toLocaleString()} steps` : '') +
     ` · ends ${remH > 0 ? `${remH}h ` : ''}${remM}m`;
 
+  // rail <-> pager swap is a cross-fade, not a pop (both are the same
+  // fixed height, so only opacity animates)
+  const animateSurface = () =>
+    LayoutAnimation.configureNext({
+      duration: 200,
+      create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    });
+
   // stable identity so memoized chips/markers aren't re-rendered by the handler
   const select = useCallback((id: string) => {
+    animateSurface();
     setSelectedId((cur) => (cur === id ? null : id));
     setFollow(true);
     setAutoFit(false);
   }, []);
+
+  // pager landings focus without toggling (the page IS the selection)
+  const focusMember = useCallback((id: string) => {
+    setSelectedId(id);
+    setFollow(true);
+    setAutoFit(false);
+  }, []);
+
+  // surface order: you, then fastest ETA first, departed last
+  const orderedMembers = useMemo(() => sortMembers(sim.members, 'you'), [sim.members]);
+
+  // the deck order is FROZEN while the pager is open: live ETAs cross
+  // constantly, and pages reordering under an active swipe is disorienting
+  const pagerOpen = selectedId !== null;
+  const deckIds = useMemo(
+    () => (pagerOpen ? sortMembers(sim.members, 'you').map((m) => m.id) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pagerOpen]
+  );
+  const deck = useMemo(
+    () => deckIds.map((id) => sim.members.find((m) => m.id === id)).filter((m): m is SimMember => !!m),
+    [deckIds, sim.members]
+  );
 
   // while a bottom sheet is up, the session's own bottom panels (rail/card,
   // dock, fabs) would show through the dimmed backdrop as ghost panels
@@ -285,14 +320,19 @@ export default function SessionScreen() {
       {!sheetOpen && (
       <View style={styles.memberArea} pointerEvents="box-none">
         {selected ? (
-          <MemberCard
-            member={selected}
+          <MemberPager
+            members={deck}
+            selectedId={selectedId}
             you={you}
-            onRetrace={() => retrace(selected)}
-            onClose={() => setSelectedId(null)}
+            onFocus={focusMember}
+            onRetrace={retrace}
+            onClose={() => {
+              animateSurface();
+              setSelectedId(null);
+            }}
           />
         ) : (
-          <MemberRail members={sim.members} selectedId={selectedId} onSelect={select} />
+          <MemberRail members={orderedMembers} selectedId={selectedId} onSelect={select} />
         )}
       </View>
       )}

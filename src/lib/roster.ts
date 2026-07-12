@@ -5,6 +5,19 @@
  * in the pile, even when they sit past the cut, or focusing member #6 highlights
  * nobody and the pile looks broken.
  */
+/**
+ * Member surface ordering: you first, then active members fastest ETA
+ * first, departed members last. Sort is stable, so equal keys keep their
+ * incoming order.
+ */
+export function sortMembers<T extends { id: string; etaMin: number; left?: boolean }>(
+  members: T[],
+  youId: string
+): T[] {
+  const rank = (m: T) => (m.id === youId ? 0 : m.left ? 2 : 1);
+  return [...members].sort((a, b) => rank(a) - rank(b) || a.etaMin - b.etaMin);
+}
+
 export function rosterPile<T extends { id: string }>(
   members: T[],
   selectedId: string | null,
