@@ -33,7 +33,19 @@ const CLOSED = DOCK_H - DOCK_PEEK;
  * shows a one-line live ticker (latest event); drag or tap to expand. When
  * everyone arrives it leads with a session recap.
  */
-export function ActivityDock({ sim, sessionName, destinationName }: { sim: Simulation; sessionName: string; destinationName: string }) {
+export function ActivityDock({
+  sim,
+  sessionName,
+  destinationName,
+  onOpenChange,
+}: {
+  sim: Simulation;
+  sessionName: string;
+  destinationName: string;
+  /** fires when the dock crosses open/closed — the session slides the
+      member surface aside while the dock is up */
+  onOpenChange?: (open: boolean) => void;
+}) {
   const y = useRef(new Animated.Value(CLOSED)).current;
   const yNow = useRef(CLOSED);
   const dragFrom = useRef(CLOSED);
@@ -46,6 +58,11 @@ export function ActivityDock({ sim, sessionName, destinationName }: { sim: Simul
     });
     return () => y.removeListener(id);
   }, [y]);
+
+  useEffect(() => {
+    onOpenChange?.(open);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const snapTo = (target: number) => {
     // JS driver on purpose: the pan gesture writes this value via setValue
@@ -233,14 +250,22 @@ const FeedRow = React.memo(
 );
 
 const styles = StyleSheet.create({
+  // flush like the invite sheet: edge-to-edge, anchored to the screen
+  // bottom with square (invisible) bottom corners — only the top rounds
   wrap: {
     position: 'absolute',
-    left: 10,
-    right: 10,
-    bottom: 10,
+    left: 0,
+    right: 0,
+    bottom: 0,
     height: DOCK_H,
   },
-  dock: { flex: 1, paddingHorizontal: 14, backgroundColor: 'rgba(11,13,18,0.16)' },
+  dock: {
+    flex: 1,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(11,13,18,0.16)',
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
   handleZone: { alignItems: 'center', paddingTop: 8, paddingBottom: 6 },
   handle: { width: 40, height: 4.5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.28)' },
   dockTitle: {

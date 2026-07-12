@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutAnimation, StyleSheet, View } from 'react-native';
+import { Animated, LayoutAnimation, StyleSheet, View, useWindowDimensions } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
 import { ActivityDock, DOCK_PEEK } from '../src/components/ActivityDock';
 import { ClusterMarker } from '../src/components/ClusterMarker';
@@ -51,6 +51,15 @@ export default function SessionScreen() {
   const liveSim = useLiveTrip(isLive, params.tripId, scenario.destination, 'Paul');
   const sim = isLive && liveSim ? liveSim : demoSim;
   const mapRef = useRef<MapView>(null);
+  const { width: screenW } = useWindowDimensions();
+  // member surface slides aside while the activity dock is expanded
+  const memberX = useRef(new Animated.Value(0)).current;
+  const onDockOpenChange = useCallback(
+    (open: boolean) => {
+      Animated.spring(memberX, { toValue: open ? -screenW : 0, useNativeDriver: true, bounciness: 6 }).start();
+    },
+    [memberX, screenW]
+  );
   const [autoFit, setAutoFit] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** camera-follow the selected member; off while retracing/panning so the
@@ -318,7 +327,7 @@ export default function SessionScreen() {
 
       {/* member surface: rail of everyone, or the focused member's card */}
       {!sheetOpen && (
-      <View style={styles.memberArea} pointerEvents="box-none">
+      <Animated.View style={[styles.memberArea, { transform: [{ translateX: memberX }] }]} pointerEvents="box-none">
         {selected ? (
           <MemberPager
             members={deck}
@@ -334,11 +343,16 @@ export default function SessionScreen() {
         ) : (
           <MemberRail members={orderedMembers} selectedId={selectedId} onSelect={select} />
         )}
-      </View>
+      </Animated.View>
       )}
 
       {!sheetOpen && (
-        <ActivityDock sim={sim} sessionName={sessionName} destinationName={scenario.destination.name} />
+        <ActivityDock
+          sim={sim}
+          sessionName={sessionName}
+          destinationName={scenario.destination.name}
+          onOpenChange={onDockOpenChange}
+        />
       )}
 
       <InviteSheet
