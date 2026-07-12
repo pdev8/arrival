@@ -96,7 +96,7 @@ The core promise: two phones see each other move. Everything in this epic replac
 | **B3** | `feat/invite-links` | Join codes, arrival.app universal links, join/[code] preview screen, 12-member cap, owner lock + regenerate (F1a). *feat/session-crud* | L | Open |
 | **B4** | `feat/realtime-positions` | Private trip:{id} broadcast channel (RLS-authorized), GPS publish @3s + 30s snapshots, roster/feed via postgres_changes, live trails/ETAs/steps; verify-backend proves a 2-user realtime round-trip (10/10). *✦ Shipped — PR #19 merged. YOUR acceptance test: two phones, one link, walk around* | L | **Shipped** (PR #19) |
 | **B5** | `feat/background-tracking` | expo-task-manager background updates; speed-adaptive sampling and the stationary low-power downshift (§5.4). *feat/realtime-positions, needs dev client* | L | Open |
-| **B6** | `feat/stops-live` | Replace sim stop/vote/join mutations with Postgres writes + postgres_changes subscriptions. *infra/supabase-setup* | M | Open |
+| **B6** | `feat/stops-live` | Replace sim stop/vote/join mutations with Postgres writes + postgres_changes subscriptions. *infra/supabase-setup* *✦ Shipped — PR #23 (triggers server-side: auto-upvote, 2-vote confirm, feed events; reactions via toggle_reaction RPC)* | M | **Shipped** (PR #23) |
 
 ## S — App Store readiness (P0)
 

@@ -1,10 +1,20 @@
 import * as Location from 'expo-location';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { FeedEvent, SimMember, Simulation } from '../demo/simulation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FeedEvent, SessionStop, SimMember, Simulation, StopCategory } from '../demo/simulation';
 import { surfaceError } from '../lib/errors';
 import { LatLng, distanceM } from '../lib/geo';
 import { ensureSignedIn, supabase } from '../lib/supabase';
 import { appendToTrail, stateFromSpeed, straightLineEtaMin, trailDistanceM } from './live-helpers';
+import {
+  EventRow,
+  ParticipantRow,
+  StopRow,
+  VoteRow,
+  mapEvent,
+  mapReactions,
+  mapStops,
+  youify,
+} from './live-stops';
 
 /** publish cadence (foreground, SPEC §5.3); background rates land with B5 */
 const PUBLISH_MS = 3000;
@@ -12,6 +22,7 @@ const PUBLISH_MS = 3000;
 const SNAPSHOT_MS = 30000;
 const ARRIVE_RADIUS_M = 40;
 const STRIDE_M = 0.75;
+const FEED_HISTORY = 50;
 
 interface WireMember {
   id: string;
@@ -36,12 +47,16 @@ interface PosPayload {
 }
 
 /**
- * B4 — the live counterpart of useSimulation, same Simulation shape so the
- * session screen swaps sources with one conditional. Realtime positions ride
- * a private trip:{id} broadcast channel; the roster and feed ride
- * postgres_changes; your own GPS publishes at foreground cadence and
- * snapshots every 30 s for late joiners. Stops & votes go live in B6 —
- * their actions surface a notice until then.
+ * B4+B6 — the live counterpart of useSimulation, same Simulation shape so
+ * the session screen swaps sources with one conditional. Realtime positions
+ * ride a private trip:{id} broadcast channel; roster, stops, votes and feed
+ * ride postgres_changes; your own GPS publishes at foreground cadence and
+ * snapshots every 30 s for late joiners.
+ *
+ * Boundary rule: everywhere the UI sees an id (member ids, stop voters,
+ * reaction ids, feed actors), YOUR uuid is translated to the literal 'you'
+ * (see live-stops.ts) — the components were built against the demo sim and
+ * key self-checks off that literal.
  */
 export function useLiveTrip(
   enabled: boolean,
@@ -50,8 +65,11 @@ export function useLiveTrip(
   youName: string
 ): Simulation | null {
   const membersRef = useRef(new Map<string, WireMember>());
+  const namesRef = useRef(new Map<string, string>());
+  const youIdRef = useRef<string | null>(null);
   const startAtRef = useRef(0);
   const [feed, setFeed] = useState<FeedEvent[]>([]);
+  const [stops, setStops] = useState<SessionStop[]>([]);
   const [tick, setTick] = useState(0); // bumped on every wire update
 
   useEffect(() => {
@@ -74,7 +92,7 @@ export function useLiveTrip(
         .from('profiles')
         .select('id,display_name')
         .in('id', ids);
-      const names = new Map((profiles ?? []).map((p) => [p.id, p.display_name]));
+      for (const p of profiles ?? []) namesRef.current.set(p.id, p.display_name);
       for (const r of rows ?? []) {
         const existing = membersRef.current.get(r.user_id);
         const pos =
@@ -83,7 +101,7 @@ export function useLiveTrip(
             : null;
         membersRef.current.set(r.user_id, {
           id: r.user_id,
-          name: r.user_id === youId ? 'You' : (names.get(r.user_id) ?? 'Friend'),
+          name: r.user_id === youId ? 'You' : (namesRef.current.get(r.user_id) ?? 'Friend'),
           color: r.color,
           isYou: r.user_id === youId,
           pos: existing?.pos ?? pos,
@@ -96,6 +114,46 @@ export function useLiveTrip(
         });
       }
       bump();
+    };
+
+    const actorName = (id: string | null, youId: string) =>
+      id === youId ? 'You' : id ? (namesRef.current.get(id) ?? 'Someone') : 'Someone';
+
+    const loadFeed = async (youId: string) => {
+      const { data, error } = await supabase!
+        .from('trip_events')
+        .select('id,type,actor_id,payload,reactions,created_at')
+        .eq('trip_id', tripId)
+        .order('id', { ascending: false })
+        .limit(FEED_HISTORY);
+      if (error) return surfaceError('Loading activity', error);
+      if (dead) return;
+      setFeed(
+        (data as EventRow[]).map((row) =>
+          mapEvent(row, actorName(row.actor_id, youId), youId, startAtRef.current)
+        )
+      );
+    };
+
+    const loadStops = async (youId: string) => {
+      const { data: stopRows, error } = await supabase!
+        .from('stops')
+        .select('id,trip_id,created_by,kind,status,category,name,lat,lng,note')
+        .eq('trip_id', tripId);
+      if (error) return surfaceError('Loading stops', error);
+      const ids = (stopRows ?? []).map((s) => s.id);
+      let votes: VoteRow[] = [];
+      let participants: ParticipantRow[] = [];
+      if (ids.length) {
+        const [v, p] = await Promise.all([
+          supabase!.from('stop_votes').select('stop_id,user_id,vote').in('stop_id', ids),
+          supabase!.from('stop_participants').select('stop_id,user_id').in('stop_id', ids),
+        ]);
+        votes = (v.data as VoteRow[]) ?? [];
+        participants = (p.data as ParticipantRow[]) ?? [];
+      }
+      if (dead) return;
+      setStops(mapStops((stopRows as StopRow[]) ?? [], votes, participants, youId));
     };
 
     const applyPos = (p: PosPayload) => {
@@ -115,11 +173,14 @@ export function useLiveTrip(
     (async () => {
       try {
         const youId = await ensureSignedIn();
+        youIdRef.current = youId;
         await supabase!.rpc('upsert_display_name', { p_name: youName }).then(
           ({ error }) => error && console.warn('display name', error.message)
         );
         await loadRoster(youId);
+        await Promise.all([loadFeed(youId), loadStops(youId)]);
 
+        const refreshStops = () => loadStops(youId);
         const channel = supabase!
           .channel(`trip:${tripId}`, { config: { private: true, broadcast: { self: false } } })
           .on('broadcast', { event: 'pos' }, ({ payload }) => applyPos(payload as PosPayload))
@@ -132,18 +193,38 @@ export function useLiveTrip(
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'trip_events', filter: `trip_id=eq.${tripId}` },
             (msg) => {
-              const row = msg.new as { id: number; type: string; actor_id: string | null; created_at: string };
-              const who = membersRef.current.get(row.actor_id ?? '');
+              const row = msg.new as EventRow;
               setFeed((f) => [
-                {
-                  id: String(row.id),
-                  at: (Date.parse(row.created_at) - startAtRef.current) / 1000,
-                  memberId: row.actor_id ?? undefined,
-                  text: eventText(row.type, who?.name ?? 'Someone'),
-                },
-                ...f,
+                mapEvent(row, actorName(row.actor_id, youId), youId, startAtRef.current),
+                ...f.filter((e) => e.id !== String(row.id)),
               ]);
             }
+          )
+          .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'trip_events', filter: `trip_id=eq.${tripId}` },
+            (msg) => {
+              const row = msg.new as EventRow;
+              setFeed((f) =>
+                f.map((e) =>
+                  e.id === String(row.id) ? { ...e, reactions: mapReactions(row.reactions, youId) } : e
+                )
+              );
+            }
+          )
+          // stops/votes/participants: any change → refetch the bundle. Volume
+          // is human-scale; votes/participants can't filter by trip (no
+          // trip_id column) so RLS is the filter.
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'stops', filter: `trip_id=eq.${tripId}` },
+            refreshStops
+          )
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'stop_votes' }, refreshStops)
+          .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'stop_participants' },
+            refreshStops
           )
           .subscribe((status, err) => {
             if (status === 'CHANNEL_ERROR') surfaceError('Live channel', err ?? 'connection failed');
@@ -204,8 +285,73 @@ export function useLiveTrip(
     };
   }, [enabled, tripId]);
 
+  // ------------------------------------------------------------- actions
+
+  const vote = useCallback(
+    (stopId: string, up: boolean) => {
+      const youId = youIdRef.current;
+      if (!supabase || !youId) return;
+      supabase
+        .from('stop_votes')
+        .upsert({ stop_id: stopId, user_id: youId, vote: up ? 1 : -1 })
+        .then(({ error }) => error && surfaceError('Voting', error));
+    },
+    []
+  );
+
+  const joinStop = useCallback((stopId: string) => {
+    const youId = youIdRef.current;
+    if (!supabase || !youId) return;
+    supabase
+      .from('stop_participants')
+      .upsert({ stop_id: stopId, user_id: youId })
+      .then(({ error }) => error && surfaceError('Joining stop', error));
+  }, []);
+
+  const postStop = useCallback(
+    (kind: 'announcement' | 'suggestion') =>
+      (pos: LatLng, category: StopCategory, note: string) => {
+        const youId = youIdRef.current;
+        if (!supabase || !youId || !tripId) return;
+        supabase
+          .from('stops')
+          .insert({
+            trip_id: tripId,
+            created_by: youId,
+            kind,
+            status: kind === 'announcement' ? 'active' : 'proposed',
+            category,
+            name: note.trim() || (kind === 'announcement' ? 'Quick stop' : 'Suggested stop'),
+            note: note.trim() || null,
+            lat: pos.latitude,
+            lng: pos.longitude,
+          })
+          .then(({ error }) => error && surfaceError('Posting stop', error));
+      },
+    [tripId]
+  );
+
+  const react = useCallback((eventId: string, emoji: string) => {
+    const youId = youIdRef.current;
+    if (!supabase || !youId) return;
+    supabase
+      .rpc('toggle_reaction', { p_event_id: Number(eventId), p_emoji: emoji })
+      .then(({ data, error }) => {
+        if (error) return surfaceError('Reacting', error);
+        // optimistic-ish: apply the authoritative result immediately
+        setFeed((f) =>
+          f.map((e) =>
+            e.id === eventId
+              ? { ...e, reactions: mapReactions(data as Record<string, string[]>, youId) }
+              : e
+          )
+        );
+      });
+  }, []);
+
   return useMemo(() => {
     if (!enabled || !tripId) return null;
+    const youId = youIdRef.current ?? '';
     const members: SimMember[] = [...membersRef.current.values()]
       .filter((m) => m.pos)
       .map((m) => {
@@ -216,7 +362,7 @@ export function useLiveTrip(
         const mode = state === 'driving' ? ('car' as const) : ('foot' as const);
         const first = m.firstRemainingM ?? remainingM;
         return {
-          id: m.id,
+          id: youify(m.id, youId),
           name: m.name,
           avatar: undefined, // photos arrive with real profiles (A epic)
           color: m.color,
@@ -234,34 +380,19 @@ export function useLiveTrip(
           trail: m.trail,
         };
       });
-    const notReady = (what: string) => () =>
-      surfaceError(what, 'Live stops & votes arrive with the next backend PR (B6)');
     return {
       members,
-      stops: [],
+      stops,
       feed,
       allArrived: members.length > 0 && members.every((m) => m.state === 'arrived'),
       arrivalOrder: [],
       elapsedSec: (Date.now() - startAtRef.current) / 1000,
-      vote: notReady('Voting'),
-      react: notReady('Reactions'),
-      joinStop: notReady('Joining stops'),
-      announceStop: notReady('Announcing stops'),
-      suggestStop: notReady('Suggesting stops'),
+      vote,
+      react,
+      joinStop,
+      announceStop: postStop('announcement'),
+      suggestStop: postStop('suggestion'),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, tripId, tick, feed]);
-}
-
-function eventText(type: string, name: string): string {
-  switch (type) {
-    case 'session_started':
-      return 'Session started';
-    case 'member_joined':
-      return `${name} joined the session`;
-    case 'session_completed':
-      return 'Session ended';
-    default:
-      return `${name} · ${type}`;
-  }
+  }, [enabled, tripId, tick, feed, stops, vote, react, joinStop, postStop]);
 }

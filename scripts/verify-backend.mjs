@@ -95,6 +95,46 @@ check('realtime broadcast on private channel', !!pos2, pos2 ? `lat=${pos2.lat}` 
 await alice.removeAllChannels();
 await bob.removeAllChannels();
 
+// 8. B6: suggestion → creator auto-upvote → second vote confirms (trigger)
+const stopIns = await bob.from('stops').insert({
+  trip_id: trip.id, created_by: bobId, kind: 'suggestion', status: 'proposed',
+  category: 'food', name: 'Shake Shack', note: 'Burgers?', lat: 40.7501, lng: -74.0002,
+}).select().single();
+check('member posts a suggestion', !stopIns.error, stopIns.error?.message);
+const stopId = stopIns.data?.id;
+
+const creatorVote = await bob.from('stop_votes').select('vote').eq('stop_id', stopId);
+check('creator auto-upvoted (trigger)', creatorVote.data?.length === 1 && creatorVote.data[0].vote === 1);
+
+const aliceId = (await alice.auth.getUser()).data.user.id;
+await alice.from('stop_votes').upsert({ stop_id: stopId, user_id: aliceId, vote: 1 });
+const confirmed = await alice.from('stops').select('status').eq('id', stopId).single();
+check('two upvotes confirm (trigger)', confirmed.data?.status === 'confirmed', confirmed.data?.status);
+
+const joined2 = await alice.from('stop_participants').upsert({ stop_id: stopId, user_id: aliceId });
+check('member joins a stop', !joined2.error, joined2.error?.message);
+
+const events = await alice.from('trip_events').select('type').eq('trip_id', trip.id).order('id');
+const types = (events.data ?? []).map((e) => e.type);
+check('feed carries stop_posted + stop_confirmed + stop_joined',
+  types.includes('stop_posted') && types.includes('stop_confirmed') && types.includes('stop_joined'),
+  types.join(','));
+
+// 9. reactions toggle on/off via RPC
+const evId = (await alice.from('trip_events').select('id').eq('trip_id', trip.id).limit(1).single()).data?.id;
+const r1 = await alice.rpc('toggle_reaction', { p_event_id: evId, p_emoji: '🎉' });
+const r2 = await alice.rpc('toggle_reaction', { p_event_id: evId, p_emoji: '🎉' });
+check('reaction toggles on then off', !r1.error && !r2.error &&
+  JSON.stringify(r1.data)?.includes(aliceId) && !JSON.stringify(r2.data)?.includes(aliceId));
+
+// 10. RLS: non-member can't post a stop into the trip
+const malloryId = (await mallory.auth.getUser()).data.user.id;
+const intrude = await mallory.from('stops').insert({
+  trip_id: trip.id, created_by: malloryId, kind: 'suggestion', status: 'proposed',
+  category: 'other', name: 'intrusion', lat: 0, lng: 0,
+});
+check('non-member cannot post stops (RLS)', !!intrude.error);
+
 function report() {
   const fails = results.filter(([ok]) => !ok).length;
   console.log(fails === 0 ? '\nAll checks passed — backend is live.' : `\n${fails} check(s) failed.`);
