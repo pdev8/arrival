@@ -233,14 +233,22 @@ const FeedRow = React.memo(
 );
 
 const styles = StyleSheet.create({
+  // flush like the invite sheet: edge-to-edge, anchored to the screen
+  // bottom with square (invisible) bottom corners — only the top rounds
   wrap: {
     position: 'absolute',
-    left: 10,
-    right: 10,
-    bottom: 10,
+    left: 0,
+    right: 0,
+    bottom: 0,
     height: DOCK_H,
   },
-  dock: { flex: 1, paddingHorizontal: 14, backgroundColor: 'rgba(11,13,18,0.16)' },
+  dock: {
+    flex: 1,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(11,13,18,0.16)',
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
   handleZone: { alignItems: 'center', paddingTop: 8, paddingBottom: 6 },
   handle: { width: 40, height: 4.5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.28)' },
   dockTitle: {
