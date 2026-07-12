@@ -1,13 +1,18 @@
 /** Display formatting — kept apart from the geometry math in geo.ts. */
 
-/** ETA as a live countdown clock: m:ss, or h:mm:ss beyond an hour. */
+/**
+ * ETA as a live countdown clock: m:ss under an hour; past 59:59 it switches
+ * to h:mm with an explicit "hr" unit ("1:15 hr") — the unit is what keeps it
+ * from being misread as minutes:seconds, and h:mm:ss was too wide for the
+ * fixed-height member surfaces.
+ */
 export function formatEtaClock(minutes: number): string {
   const totalSec = Math.max(0, Math.round(minutes * 60));
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
   const pad = (n: number) => String(n).padStart(2, '0');
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  return h > 0 ? `${h}:${pad(m)} hr` : `${m}:${pad(s)}`;
 }
 
 export function formatDistance(meters: number): string {
