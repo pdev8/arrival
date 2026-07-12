@@ -40,6 +40,7 @@ export const MemberMarker = React.memo(
     prev.member.name === next.member.name &&
     prev.member.color === next.member.color &&
     prev.member.state === next.member.state &&
+    prev.member.left === next.member.left &&
     prev.member.level === next.member.level &&
     prev.member.pos.latitude === next.member.pos.latitude &&
     prev.member.pos.longitude === next.member.pos.longitude &&
@@ -61,7 +62,7 @@ function MemberMarkerInner({ member, mapHeading = 0, selected, hidden = false, o
       tracksViewChanges
       zIndex={member.isYou ? 20 : 10}
     >
-      <View style={styles.wrap}>
+      <View style={[styles.wrap, member.left && styles.leftDim]}>
         <View style={[styles.holder, { transform: [{ rotate: `${rot}deg` }] }]}>
           {/* pencil lead: a mini teardrop nosing out past the drop's corner — softly
               rounded point outside, the rest hidden under the photo */}
@@ -90,14 +91,14 @@ function MemberMarkerInner({ member, mapHeading = 0, selected, hidden = false, o
         <View style={styles.tag}>
           {/* tag reads: name · time · level · pause */}
           <Text style={styles.tagName}>{member.name}</Text>
-          <Text style={[styles.tagEta, { color: member.color }]}>
-            {member.state === 'arrived' ? 'here' : formatEtaClock(member.etaMin)}
+          <Text style={[styles.tagEta, member.left ? styles.tagLeft : { color: member.color }]}>
+            {member.left ? 'left' : member.state === 'arrived' ? 'here' : formatEtaClock(member.etaMin)}
           </Text>
           {/* off street level: B1 / F2 chip so verticality reads on the map */}
-          {member.level != null && (
+          {!member.left && member.level != null && (
             <Text style={styles.tagLevel}>{formatLevel(member.level)}</Text>
           )}
-          {member.state === 'stopped' && (
+          {!member.left && member.state === 'stopped' && (
             <MaterialCommunityIcons name="pause" size={10} color={member.color} />
           )}
         </View>
@@ -180,4 +181,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   tagEta: { fontSize: 10.5, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  tagLeft: { color: UI.textDim, fontSize: 10.5, fontWeight: '700' },
+  leftDim: { opacity: 0.55 },
 });

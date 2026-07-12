@@ -30,6 +30,7 @@ const FEED_HISTORY = 50;
 
 interface WireMember {
   id: string;
+  left: boolean;
   name: string;
   color: string;
   isYou: boolean;
@@ -90,7 +91,7 @@ export function useLiveTrip(
     const loadRoster = async (youId: string) => {
       const { data: rows, error } = await supabase!
         .from('trip_members')
-        .select('user_id,color,last_lat,last_lng,last_heading,last_speed,state,last_updated_at')
+        .select('user_id,color,last_lat,last_lng,last_heading,last_speed,state,last_updated_at,left_at')
         .eq('trip_id', tripId);
       if (error) return surfaceError('Loading members', error);
       const ids = (rows ?? []).map((r) => r.user_id);
@@ -112,6 +113,7 @@ export function useLiveTrip(
         const pos = useSnap ? snapPos : (existing?.pos ?? null);
         membersRef.current.set(r.user_id, {
           id: r.user_id,
+          left: r.left_at != null,
           name: r.user_id === youId ? 'You' : (namesRef.current.get(r.user_id) ?? 'Friend'),
           color: r.color,
           isYou: r.user_id === youId,
@@ -388,6 +390,7 @@ export function useLiveTrip(
         const first = m.firstRemainingM ?? remainingM;
         return {
           id: youify(m.id, youId),
+          left: m.left || undefined,
           name: m.name,
           avatar: undefined, // photos arrive with real profiles (A epic)
           color: m.color,
@@ -409,7 +412,9 @@ export function useLiveTrip(
       members,
       stops,
       feed,
-      allArrived: members.length > 0 && members.every((m) => m.state === 'arrived'),
+      allArrived:
+        members.filter((m) => !m.left).length > 0 &&
+        members.filter((m) => !m.left).every((m) => m.state === 'arrived'),
       arrivalOrder: [],
       elapsedSec: (Date.now() - startAtRef.current) / 1000,
       vote,

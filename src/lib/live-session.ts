@@ -57,9 +57,14 @@ export async function joinLiveTrip(code: string): Promise<LiveTrip> {
   return rowToTrip(data);
 }
 
-/** Leave = delete your own membership row (RLS permits only your own). */
+/** Leaving marks your row (left_at) — never deletes it. Your last-known
+ *  position stays on the group's map and in the archive. */
 export async function leaveLiveTrip(tripId: string): Promise<void> {
   if (!supabase) return;
   const userId = await ensureSignedIn();
-  await supabase.from('trip_members').delete().eq('trip_id', tripId).eq('user_id', userId);
+  await supabase
+    .from('trip_members')
+    .update({ left_at: new Date().toISOString(), sharing_enabled: false })
+    .eq('trip_id', tripId)
+    .eq('user_id', userId);
 }

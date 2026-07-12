@@ -26,8 +26,9 @@ interface Props {
  */
 export function MemberCard({ member, you, onRetrace, onClose }: Props) {
   const arrived = member.state === 'arrived';
-  let status =
-    member.state === 'arrived'
+  let status = member.left
+    ? 'Left the session — last known position'
+    : member.state === 'arrived'
       ? 'Arrived'
       : member.state === 'stopped'
         ? (member.statusNote ?? 'Stopped')
@@ -76,10 +77,10 @@ export function MemberCard({ member, you, onRetrace, onClose }: Props) {
           )}
         </View>
         <View style={styles.etaCol}>
-          <Text style={[styles.eta, { color: arrived ? UI.success : member.color }]}>
-            {arrived ? 'here' : formatEtaClock(member.etaMin)}
+          <Text style={[styles.eta, member.left ? { color: UI.textDim } : { color: arrived ? UI.success : member.color }]}>
+            {member.left ? '—' : arrived ? 'here' : formatEtaClock(member.etaMin)}
           </Text>
-          {!arrived && <Text style={styles.etaLabel}>eta</Text>}
+          {!arrived && !member.left && <Text style={styles.etaLabel}>eta</Text>}
         </View>
       </View>
       <View style={styles.actions}>
