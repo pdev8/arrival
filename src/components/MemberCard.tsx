@@ -3,11 +3,12 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { compassDir, formatDistance, formatEtaClock, formatLevel } from '../lib/format';
+import { compassDir, formatDistance, formatEtaClock, formatLevel, statusLine } from '../lib/format';
 import { bearingDeg, distanceM } from '../lib/geo';
 import { STATE_ICON } from '../lib/icons';
 import { AvatarRing } from './AvatarRing';
 import { Glass } from './Glass';
+import { MEMBER_SURFACE_H } from './MemberRail';
 import { WalkingIcon } from './WalkingIcon';
 
 interface Props {
@@ -20,20 +21,13 @@ interface Props {
 
 /**
  * Focused view of one member, shown in place of the rail while following
- * them: identity + live status, where they are relative to YOU (distance +
- * compass direction — the "which way do I look" answer a map alone doesn't
- * give), and Retrace, which frames their whole trail on the map.
+ * them. Locked to MEMBER_SURFACE_H — the exact height of the rail it
+ * replaces — so selecting/closing never shifts the layout, and no member
+ * state (departed, arrived, long name) changes the footprint: every text
+ * line truncates instead of wrapping.
  */
 export function MemberCard({ member, you, onRetrace, onClose }: Props) {
   const arrived = member.state === 'arrived';
-  let status = member.left
-    ? 'Left the session — last known position'
-    : member.state === 'arrived'
-      ? 'Arrived'
-      : member.state === 'stopped'
-        ? (member.statusNote ?? 'Stopped')
-        : `${formatDistance(member.remainingM)} out`;
-  if (member.mode === 'foot' && member.steps > 0) status += ` · ${member.steps.toLocaleString()} steps`;
 
   const relative =
     you && you.id !== member.id
@@ -46,15 +40,17 @@ export function MemberCard({ member, you, onRetrace, onClose }: Props) {
         <AvatarRing
           source={member.avatar}
           name={member.name}
-          size={56}
-          avatarSize={42}
+          size={46}
+          avatarSize={34}
           progress={member.progress}
           color={member.color}
           arrived={arrived}
           count={16}
         />
         <View style={{ flex: 1 }}>
-          <Text style={styles.name}>{member.name}</Text>
+          <Text style={styles.name} numberOfLines={1}>
+            {member.name}
+          </Text>
           <View style={styles.statusRow}>
             {member.state === 'walking' ? (
               <WalkingIcon />
@@ -62,19 +58,17 @@ export function MemberCard({ member, you, onRetrace, onClose }: Props) {
               <MaterialCommunityIcons name={STATE_ICON[member.state]} size={12} color={UI.textDim} />
             )}
             <Text style={styles.status} numberOfLines={1}>
-              {status}
+              {statusLine(member)}
+              {relative && <Text style={{ color: member.color, fontWeight: '700' }}> · {relative}</Text>}
+              {member.level != null && (
+                <Text>
+                  {' · '}
+                  {formatLevel(member.level)}
+                  {member.levelLabel ? ` ${member.levelLabel}` : ''}
+                </Text>
+              )}
             </Text>
           </View>
-          {relative && (
-            <Text style={[styles.relative, { color: member.color }]}>{relative}</Text>
-          )}
-          {member.level != null && (
-            <Text style={styles.level}>
-              {formatLevel(member.level)}
-              {member.levelLabel ? ` · ${member.levelLabel}` : ''} —{' '}
-              {member.level < 0 ? 'below street level' : 'above street level'}
-            </Text>
-          )}
         </View>
         <View style={styles.etaCol}>
           <Text style={[styles.eta, member.left ? { color: UI.textDim } : { color: arrived ? UI.success : member.color }]}>
@@ -85,7 +79,7 @@ export function MemberCard({ member, you, onRetrace, onClose }: Props) {
       </View>
       <View style={styles.actions}>
         <Pressable style={styles.actionPrimary} onPress={onRetrace}>
-          <MaterialCommunityIcons name="map-marker-path" size={14} color={UI.bg} />
+          <MaterialCommunityIcons name="map-marker-path" size={13} color={UI.bg} />
           <Text style={styles.actionPrimaryText}>Retrace steps</Text>
         </Pressable>
         <Pressable style={styles.actionGhost} onPress={onClose}>
@@ -97,17 +91,21 @@ export function MemberCard({ member, you, onRetrace, onClose }: Props) {
 }
 
 const styles = StyleSheet.create({
-  card: { marginHorizontal: 12, padding: 12 },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  name: { color: UI.text, fontSize: 16, fontWeight: '800' },
+  card: {
+    marginHorizontal: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    height: MEMBER_SURFACE_H,
+    justifyContent: 'space-between',
+  },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  name: { color: UI.text, fontSize: 15, fontWeight: '800' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   status: { color: UI.textDim, fontSize: 12.5, flexShrink: 1 },
-  relative: { fontSize: 12.5, fontWeight: '700', marginTop: 2 },
-  level: { color: UI.textDim, fontSize: 12, fontWeight: '600', marginTop: 2 },
   etaCol: { alignItems: 'flex-end' },
-  eta: { fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  etaLabel: { color: UI.textDim, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  eta: { fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  etaLabel: { color: UI.textDim, fontSize: 9.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
+  actions: { flexDirection: 'row', gap: 8 },
   actionPrimary: {
     flex: 1,
     flexDirection: 'row',
@@ -115,17 +113,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 10,
+    borderRadius: 11,
+    paddingVertical: 5,
   },
-  actionPrimaryText: { color: UI.bg, fontSize: 13.5, fontWeight: '700' },
+  actionPrimaryText: { color: UI.bg, fontSize: 12.5, fontWeight: '700' },
   actionGhost: {
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    borderRadius: 11,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionGhostText: { color: UI.text, fontSize: 13.5, fontWeight: '600' },
+  actionGhostText: { color: UI.text, fontSize: 12.5, fontWeight: '600' },
 });

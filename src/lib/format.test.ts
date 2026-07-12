@@ -1,4 +1,4 @@
-import { compassDir, formatDistance, formatEtaClock, formatLevel, timeAgo } from './format';
+import { compassDir, formatDistance, formatEtaClock, formatLevel, statusLine, timeAgo } from './format';
 
 describe('formatEtaClock', () => {
   it('renders minutes:seconds', () => {
@@ -62,5 +62,27 @@ describe('timeAgo', () => {
   });
   it('floors to hours', () => {
     expect(timeAgo(7300)).toBe('2h');
+  });
+});
+
+describe('statusLine', () => {
+  it('shows remaining distance while moving', () => {
+    expect(statusLine({ state: 'walking', remainingM: 800, mode: 'foot', steps: 0 })).toBe('0.5 mi out');
+  });
+  it('appends steps on foot', () => {
+    expect(statusLine({ state: 'walking', remainingM: 800, mode: 'foot', steps: 1200 })).toBe(
+      '0.5 mi out · 1,200 steps'
+    );
+  });
+  it('prefers the status note when stopped', () => {
+    expect(statusLine({ state: 'stopped', statusNote: 'Coffee stop', remainingM: 500 })).toBe('Coffee stop');
+  });
+  it('says Arrived', () => {
+    expect(statusLine({ state: 'arrived', remainingM: 0 })).toBe('Arrived');
+  });
+  it('departed members: last known position, no steps', () => {
+    expect(statusLine({ state: 'walking', left: true, remainingM: 800, mode: 'foot', steps: 1200 })).toBe(
+      'Left — last known position'
+    );
   });
 });

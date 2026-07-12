@@ -21,6 +21,30 @@ export function formatLevel(level: number): string {
   return level < 0 ? `B${-level}` : `F${level}`;
 }
 
+/**
+ * One-line status for the member card. Single line by contract — the card
+ * has a fixed height (matches the rail), so nothing here may wrap; the
+ * component truncates with numberOfLines={1}.
+ */
+export function statusLine(m: {
+  state: string;
+  left?: boolean;
+  statusNote?: string;
+  remainingM: number;
+  mode?: string;
+  steps?: number;
+}): string {
+  let s = m.left
+    ? 'Left — last known position'
+    : m.state === 'arrived'
+      ? 'Arrived'
+      : m.state === 'stopped'
+        ? (m.statusNote ?? 'Stopped')
+        : `${formatDistance(m.remainingM)} out`;
+  if (!m.left && m.mode === 'foot' && (m.steps ?? 0) > 0) s += ` · ${m.steps!.toLocaleString()} steps`;
+  return s;
+}
+
 /** Bearing → 8-wind compass direction ("NE"), for "0.4 mi NE of you" lines. */
 export function compassDir(bearing: number): string {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
