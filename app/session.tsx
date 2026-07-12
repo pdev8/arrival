@@ -151,6 +151,11 @@ export default function SessionScreen() {
     setAutoFit(false);
   }, []);
 
+  // while a bottom sheet is up, the session's own bottom panels (rail/card,
+  // dock, fabs) would show through the dimmed backdrop as ghost panels
+  // stacked above the sheet — hide them so the sheet rises over map only
+  const sheetOpen = inviteOpen || placePick !== null;
+
   const retrace = (m: SimMember) => {
     if (m.trail.length > 1) {
       setFollow(false);
@@ -250,6 +255,7 @@ export default function SessionScreen() {
         onInvite={() => setInviteOpen(true)}
       />
 
+      {!sheetOpen && (
       <MapFabs
         bottom={DOCK_PEEK + 130}
         showTrails={showTrails}
@@ -261,8 +267,10 @@ export default function SessionScreen() {
           fitCounter.current = 0;
         }}
       />
+      )}
 
       {/* member surface: rail of everyone, or the focused member's card */}
+      {!sheetOpen && (
       <View style={styles.memberArea} pointerEvents="box-none">
         {selected ? (
           <MemberCard
@@ -275,8 +283,11 @@ export default function SessionScreen() {
           <MemberRail members={sim.members} selectedId={selectedId} onSelect={select} />
         )}
       </View>
+      )}
 
-      <ActivityDock sim={sim} sessionName={sessionName} destinationName={scenario.destination.name} />
+      {!sheetOpen && (
+        <ActivityDock sim={sim} sessionName={sessionName} destinationName={scenario.destination.name} />
+      )}
 
       <InviteSheet
         visible={inviteOpen}
