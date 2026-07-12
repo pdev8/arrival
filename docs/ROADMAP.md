@@ -1,11 +1,16 @@
 # Arrival — Launch Roadmap
 
-**Source of truth: the live roadmap artifact** (see `reference-roadmap-artifact`
-in project memory / ask Claude to reopen it). This file is its committed mirror —
-regenerate it from the artifact when statuses change; don't hand-edit both.
+**The roadmap has three copies, and this is the reading order:**
 
-Tasks are numbered by epic prefix (D1, V3, B4…) and ordered **low → high
-priority: the bottom of this file ships first.** Every task is scoped as one PR.
+| Copy | What it's for |
+|---|---|
+| [`docs/roadmap.html`](roadmap.html) | **The source.** The full interactive page — filters, state, PR links, copy-as-issue. Open it locally or publish it as the artifact. Edit the `EPICS` array here; everything else is generated from it. |
+| The live artifact | The published, shareable view of `docs/roadmap.html` (same file, republished in place — the URL never changes). Ask Claude to reopen it; see `reference-roadmap-artifact` in project memory. |
+| This file | The plain-text mirror, for reading in the repo and in diffs. Regenerate it when statuses change; don't hand-edit all three. |
+
+Tasks are numbered by epic prefix (D1, V3, B4…). This mirror is ordered
+**low → high priority (the bottom ships first)**; the HTML page reorders to
+ship-blocking-first, which is the better read. Every task is scoped as one PR.
 
 > **The gate:** do not submit to the App Store before the live backend ships —
 > a simulation-only build is a guideline 4.2 (minimal functionality) rejection.
