@@ -78,8 +78,15 @@ export function PlaceSheet({
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
-  wrap: { paddingHorizontal: 10, paddingBottom: 12 },
-  sheet: { padding: 18, paddingBottom: 26 },
+  // flush bottom sheet — matches InviteSheet's anchoring
+  wrap: {},
+  sheet: {
+    padding: 18,
+    paddingBottom: 86,
+    marginBottom: -40,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
   title: { color: UI.text, fontSize: 18, fontWeight: '800' },
   sub: { color: UI.textDim, fontSize: 12, marginTop: 2 },
   catRow: { flexDirection: 'row', gap: 8, marginTop: 14 },

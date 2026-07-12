@@ -83,8 +83,16 @@ export function InviteSheet({ visible, sessionName, joinCode, onClose }: Props) 
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
-  wrap: { paddingHorizontal: 10, paddingBottom: 12 },
-  sheet: { padding: 18, paddingBottom: 24 },
+  // flush bottom sheet: full width, bottom edge (and its corners/border)
+  // pushed well past the screen so only the top corners read as rounded
+  wrap: {},
+  sheet: {
+    padding: 18,
+    paddingBottom: 84,
+    marginBottom: -40,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
   title: { color: UI.text, fontSize: 18, fontWeight: '800' },
   sub: { color: UI.textDim, fontSize: 12.5, marginTop: 3 },
   codeBox: {
