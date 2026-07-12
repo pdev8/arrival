@@ -18,8 +18,12 @@ import {
 
 /** publish cadence (foreground, SPEC §5.3); background rates land with B5 */
 const PUBLISH_MS = 3000;
-/** snapshot upsert for late joiners */
-const SNAPSHOT_MS = 30000;
+/** snapshot upsert cadence — also the worst-case visibility if broadcast
+ *  delivery fails, so it's tight for M1 */
+const SNAPSHOT_MS = 10000;
+/** roster poll safety net: even with zero realtime delivery, everyone's
+ *  snapshot position surfaces at this cadence */
+const POLL_MS = 15000;
 const ARRIVE_RADIUS_M = 40;
 const STRIDE_M = 0.75;
 const FEED_HISTORY = 50;
@@ -77,6 +81,8 @@ export function useLiveTrip(
     let dead = false;
     let watcher: Location.LocationSubscription | null = null;
     let snapshotTimer: ReturnType<typeof setInterval> | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let sendFailureSurfaced = false;
     let lastPublish = 0;
     startAtRef.current = Date.now();
     const bump = () => !dead && setTick((t) => t + 1);
@@ -84,7 +90,7 @@ export function useLiveTrip(
     const loadRoster = async (youId: string) => {
       const { data: rows, error } = await supabase!
         .from('trip_members')
-        .select('user_id,color,last_lat,last_lng,last_heading,last_speed,state')
+        .select('user_id,color,last_lat,last_lng,last_heading,last_speed,state,last_updated_at')
         .eq('trip_id', tripId);
       if (error) return surfaceError('Loading members', error);
       const ids = (rows ?? []).map((r) => r.user_id);
@@ -95,22 +101,27 @@ export function useLiveTrip(
       for (const p of profiles ?? []) namesRef.current.set(p.id, p.display_name);
       for (const r of rows ?? []) {
         const existing = membersRef.current.get(r.user_id);
-        const pos =
+        const snapPos =
           r.last_lat != null && r.last_lng != null
             ? { latitude: r.last_lat, longitude: r.last_lng }
             : null;
+        const snapAt = r.last_updated_at ? Date.parse(r.last_updated_at) : 0;
+        // take the snapshot when it's all we have, or when it's fresher than
+        // the last live broadcast we applied
+        const useSnap = !!snapPos && (!existing?.pos || snapAt > (existing?.lastAt ?? 0));
+        const pos = useSnap ? snapPos : (existing?.pos ?? null);
         membersRef.current.set(r.user_id, {
           id: r.user_id,
           name: r.user_id === youId ? 'You' : (namesRef.current.get(r.user_id) ?? 'Friend'),
           color: r.color,
           isYou: r.user_id === youId,
-          pos: existing?.pos ?? pos,
-          heading: existing?.heading ?? r.last_heading ?? 0,
-          speed: existing?.speed ?? r.last_speed ?? null,
-          trail: existing?.trail ?? (pos ? [pos] : []),
+          pos,
+          heading: useSnap ? (r.last_heading ?? existing?.heading ?? 0) : (existing?.heading ?? r.last_heading ?? 0),
+          speed: useSnap ? (r.last_speed ?? null) : (existing?.speed ?? r.last_speed ?? null),
+          trail: useSnap && snapPos ? appendToTrail(existing?.trail ?? [], snapPos) : (existing?.trail ?? []),
           firstRemainingM: existing?.firstRemainingM ?? (pos ? distanceM(pos, destination.pos) : null),
-          arrived: existing?.arrived ?? r.state === 'arrived',
-          lastAt: existing?.lastAt ?? 0,
+          arrived: existing?.arrived || r.state === 'arrived' || (!!pos && distanceM(pos, destination.pos) <= ARRIVE_RADIUS_M),
+          lastAt: useSnap ? snapAt : (existing?.lastAt ?? 0),
         });
       }
       bump();
@@ -158,7 +169,12 @@ export function useLiveTrip(
 
     const applyPos = (p: PosPayload) => {
       const m = membersRef.current.get(p.id);
-      if (!m) return; // roster refresh will pick them up
+      if (!m) {
+        // a member we haven't loaded yet — fetch the roster, then re-apply
+        const youId = youIdRef.current;
+        if (youId) loadRoster(youId).then(() => membersRef.current.has(p.id) && applyPos(p));
+        return;
+      }
       const pos = { latitude: p.lat, longitude: p.lng };
       m.pos = pos;
       m.heading = p.heading ?? m.heading;
@@ -186,7 +202,7 @@ export function useLiveTrip(
           .on('broadcast', { event: 'pos' }, ({ payload }) => applyPos(payload as PosPayload))
           .on(
             'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'trip_members', filter: `trip_id=eq.${tripId}` },
+            { event: '*', schema: 'public', table: 'trip_members', filter: `trip_id=eq.${tripId}` },
             () => loadRoster(youId)
           )
           .on(
@@ -230,6 +246,9 @@ export function useLiveTrip(
             if (status === 'CHANNEL_ERROR') surfaceError('Live channel', err ?? 'connection failed');
           });
 
+        // safety net: even with zero realtime delivery, snapshots surface here
+        pollTimer = setInterval(() => loadRoster(youId), POLL_MS);
+
         // your own GPS → broadcast (throttled) + periodic snapshot
         const perm = await Location.requestForegroundPermissionsAsync();
         if (perm.status !== 'granted') {
@@ -249,7 +268,12 @@ export function useLiveTrip(
                 speed: loc.coords.speed,
               };
               applyPos(payload);
-              channel.send({ type: 'broadcast', event: 'pos', payload }).catch(() => {});
+              channel.send({ type: 'broadcast', event: 'pos', payload }).then((resp) => {
+                if (resp !== 'ok' && !sendFailureSurfaced) {
+                  sendFailureSurfaced = true;
+                  surfaceError('Live position send', `broadcast ${resp} — others update via 10s snapshots`);
+                }
+              });
             }
           );
           snapshotTimer = setInterval(() => {
@@ -281,6 +305,7 @@ export function useLiveTrip(
       dead = true;
       watcher?.remove();
       if (snapshotTimer) clearInterval(snapshotTimer);
+      if (pollTimer) clearInterval(pollTimer);
       supabase?.removeAllChannels();
     };
   }, [enabled, tripId]);
