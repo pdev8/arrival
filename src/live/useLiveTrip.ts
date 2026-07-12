@@ -4,7 +4,7 @@ import { FeedEvent, SessionStop, SimMember, Simulation, StopCategory } from '../
 import { surfaceError } from '../lib/errors';
 import { LatLng, distanceM } from '../lib/geo';
 import { ensureSignedIn, supabase } from '../lib/supabase';
-import { appendToTrail, stateFromSpeed, straightLineEtaMin, trailDistanceM } from './live-helpers';
+import { Tracked, applyBroadcast, mergeSnapshot, simMotion, stateFromSpeed } from './live-helpers';
 import {
   EventRow,
   ParticipantRow,
@@ -25,22 +25,14 @@ const SNAPSHOT_MS = 10000;
  *  snapshot position surfaces at this cadence */
 const POLL_MS = 15000;
 const ARRIVE_RADIUS_M = 40;
-const STRIDE_M = 0.75;
 const FEED_HISTORY = 50;
 
-interface WireMember {
+interface WireMember extends Tracked {
   id: string;
   left: boolean;
   name: string;
   color: string;
   isYou: boolean;
-  pos: LatLng | null;
-  heading: number;
-  speed: number | null;
-  trail: LatLng[];
-  firstRemainingM: number | null;
-  arrived: boolean;
-  lastAt: number;
 }
 
 interface PosPayload {
@@ -102,28 +94,28 @@ export function useLiveTrip(
       for (const p of profiles ?? []) namesRef.current.set(p.id, p.display_name);
       for (const r of rows ?? []) {
         const existing = membersRef.current.get(r.user_id);
-        const snapPos =
-          r.last_lat != null && r.last_lng != null
-            ? { latitude: r.last_lat, longitude: r.last_lng }
-            : null;
-        const snapAt = r.last_updated_at ? Date.parse(r.last_updated_at) : 0;
-        // take the snapshot when it's all we have, or when it's fresher than
-        // the last live broadcast we applied
-        const useSnap = !!snapPos && (!existing?.pos || snapAt > (existing?.lastAt ?? 0));
-        const pos = useSnap ? snapPos : (existing?.pos ?? null);
+        const tracked = mergeSnapshot(
+          existing,
+          {
+            pos:
+              r.last_lat != null && r.last_lng != null
+                ? { latitude: r.last_lat, longitude: r.last_lng }
+                : null,
+            at: r.last_updated_at ? Date.parse(r.last_updated_at) : 0,
+            heading: r.last_heading,
+            speed: r.last_speed,
+            arrivedState: r.state === 'arrived',
+          },
+          destination.pos,
+          ARRIVE_RADIUS_M
+        );
         membersRef.current.set(r.user_id, {
           id: r.user_id,
           left: r.left_at != null,
           name: r.user_id === youId ? 'You' : (namesRef.current.get(r.user_id) ?? 'Friend'),
           color: r.color,
           isYou: r.user_id === youId,
-          pos,
-          heading: useSnap ? (r.last_heading ?? existing?.heading ?? 0) : (existing?.heading ?? r.last_heading ?? 0),
-          speed: useSnap ? (r.last_speed ?? null) : (existing?.speed ?? r.last_speed ?? null),
-          trail: useSnap && snapPos ? appendToTrail(existing?.trail ?? [], snapPos) : (existing?.trail ?? []),
-          firstRemainingM: existing?.firstRemainingM ?? (pos ? distanceM(pos, destination.pos) : null),
-          arrived: existing?.arrived || r.state === 'arrived' || (!!pos && distanceM(pos, destination.pos) <= ARRIVE_RADIUS_M),
-          lastAt: useSnap ? snapAt : (existing?.lastAt ?? 0),
+          ...tracked,
         });
       }
       bump();
@@ -177,14 +169,10 @@ export function useLiveTrip(
         if (youId) loadRoster(youId).then(() => membersRef.current.has(p.id) && applyPos(p));
         return;
       }
-      const pos = { latitude: p.lat, longitude: p.lng };
-      m.pos = pos;
-      m.heading = p.heading ?? m.heading;
-      m.speed = p.speed;
-      m.trail = appendToTrail(m.trail, pos);
-      if (m.firstRemainingM == null) m.firstRemainingM = distanceM(pos, destination.pos);
-      m.arrived = m.arrived || distanceM(pos, destination.pos) <= ARRIVE_RADIUS_M;
-      m.lastAt = Date.now();
+      membersRef.current.set(p.id, {
+        ...m,
+        ...applyBroadcast(m, p, destination.pos, ARRIVE_RADIUS_M, Date.now()),
+      });
       bump();
     };
 
@@ -381,33 +369,19 @@ export function useLiveTrip(
     const youId = youIdRef.current ?? '';
     const members: SimMember[] = [...membersRef.current.values()]
       .filter((m) => m.pos)
-      .map((m) => {
-        const pos = m.pos!;
-        const remainingM = Math.max(0, distanceM(pos, destination.pos));
-        const traveledM = trailDistanceM(m.trail);
-        const state = stateFromSpeed(m.speed, m.arrived);
-        const mode = state === 'driving' ? ('car' as const) : ('foot' as const);
-        const first = m.firstRemainingM ?? remainingM;
-        return {
-          id: youify(m.id, youId),
-          left: m.left || undefined,
-          name: m.name,
-          avatar: undefined, // photos arrive with real profiles (A epic)
-          color: m.color,
-          isYou: m.isYou,
-          pos,
-          heading: m.heading,
-          state,
-          etaMin: m.arrived ? 0 : straightLineEtaMin(pos, destination.pos, m.speed),
-          remainingM,
-          mode,
-          steps: mode === 'foot' ? Math.round(traveledM / STRIDE_M) : 0,
-          progress: first > 0 ? Math.min(1, 1 - remainingM / first) : 1,
-          level: null,
-          traveledM,
-          trail: m.trail,
-        };
-      });
+      .map((m) => ({
+        id: youify(m.id, youId),
+        left: m.left || undefined,
+        name: m.name,
+        avatar: undefined, // photos arrive with real profiles (A epic)
+        color: m.color,
+        isYou: m.isYou,
+        pos: m.pos!,
+        heading: m.heading,
+        level: null,
+        trail: m.trail,
+        ...simMotion(m, destination.pos),
+      }));
     return {
       members,
       stops,

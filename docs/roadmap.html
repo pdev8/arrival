@@ -1,0 +1,795 @@
+<title>Arrival — Launch Roadmap</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    /* neutrals carry a slight blue bias — chosen to sit under the amber, not fight it */
+    --paper: #f6f5f2;
+    --card: #ffffff;
+    --sunk: #eceae5;
+    --ink: #171a21;
+    --ink-2: #5a6273;
+    --ink-3: #8a91a0;
+    --rule: rgba(23, 26, 33, 0.11);
+    --rule-2: rgba(23, 26, 33, 0.06);
+    --amber: #b0741f;
+    --ship: #2f7d59;
+    --fly: #3a63c4;
+    --hold: #b8452f;
+    --tint: rgba(23, 26, 33, 0.045);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0c0e13;
+      --card: #14171f;
+      --sunk: #191d26;
+      --ink: #eef0f4;
+      --ink-3: #6f7789;
+      --ink-2: #98a1b2;
+      --rule: rgba(255, 255, 255, 0.1);
+      --rule-2: rgba(255, 255, 255, 0.05);
+      --amber: #e2a44e;
+      --ship: #4cae82;
+      --fly: #6c96f0;
+      --hold: #e0705a;
+      --tint: rgba(255, 255, 255, 0.05);
+    }
+  }
+  :root[data-theme='light'] {
+    --paper: #f6f5f2; --card: #ffffff; --sunk: #eceae5; --ink: #171a21; --ink-2: #5a6273;
+    --ink-3: #8a91a0; --rule: rgba(23,26,33,0.11); --rule-2: rgba(23,26,33,0.06);
+    --amber: #b0741f; --ship: #2f7d59; --fly: #3a63c4; --hold: #b8452f; --tint: rgba(23,26,33,0.045);
+  }
+  :root[data-theme='dark'] {
+    --paper: #0c0e13; --card: #14171f; --sunk: #191d26; --ink: #eef0f4; --ink-2: #98a1b2;
+    --ink-3: #6f7789; --rule: rgba(255,255,255,0.1); --rule-2: rgba(255,255,255,0.05);
+    --amber: #e2a44e; --ship: #4cae82; --fly: #6c96f0; --hold: #e0705a; --tint: rgba(255,255,255,0.05);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, 'Segoe UI', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* condensed grotesque for display — the app's own tight, geometric register */
+  .display {
+    font-family: 'Avenir Next Condensed', 'Avenir Next', 'Helvetica Neue', system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
+  .mono {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------------------------------------------------------------- masthead */
+  .masthead { border-bottom: 1px solid var(--rule); background: var(--card); }
+  .mast-in {
+    max-width: 1140px; margin: 0 auto; padding: 20px 24px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .mark {
+    width: 26px; height: 26px; flex: none; border-radius: 13px 13px 13px 4px;
+    border: 2.5px solid var(--amber); transform: rotate(45deg);
+    display: grid; place-items: center;
+  }
+  .mark i { width: 7px; height: 7px; border-radius: 4px; background: var(--amber); }
+  .mast-title { font-size: 21px; font-weight: 600; margin: 0; }
+  .mast-sub { color: var(--ink-2); font-size: 12.5px; margin-top: 1px; }
+  .mast-stats { margin-left: auto; display: flex; gap: 26px; }
+  .stat-n { font-size: 21px; font-weight: 600; line-height: 1; }
+  .stat-l {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--ink-3); margin-top: 5px;
+  }
+  .stat.ship .stat-n { color: var(--ship); }
+  .stat.hold .stat-n { color: var(--hold); }
+
+  /* progress: one segment per task, epic-grouped — the whole plan at a glance */
+  .track { display: flex; gap: 2px; max-width: 1140px; margin: 0 auto; padding: 0 24px 18px; }
+  .track-epic { display: flex; gap: 1.5px; flex: var(--n); }
+  .seg { flex: 1; height: 5px; border-radius: 1px; background: var(--tint); }
+  .seg.done { background: var(--ship); }
+  .seg.now { background: var(--fly); }
+
+  /* ---------------------------------------------------------------- layout */
+  .shell { max-width: 1140px; margin: 0 auto; padding: 0 24px 120px; display: flex; gap: 40px; align-items: flex-start; }
+  .rail { position: sticky; top: 24px; width: 208px; flex: none; padding-top: 30px; }
+  .rail-h {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--ink-3); margin-bottom: 10px;
+  }
+  .rail a {
+    display: flex; align-items: baseline; gap: 8px; padding: 5px 8px; margin: 0 -8px;
+    border-radius: 6px; color: var(--ink-2); text-decoration: none; font-size: 13px;
+  }
+  .rail a:hover { background: var(--tint); color: var(--ink); }
+  .rail a .pfx { font-size: 11px; font-weight: 700; color: var(--amber); width: 12px; }
+  .rail a .cnt { margin-left: auto; font-size: 10.5px; color: var(--ink-3); }
+  .rail-note { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--ink-3); line-height: 1.5; }
+  main { flex: 1; min-width: 0; padding-top: 30px; }
+
+  /* ---------------------------------------------------------------- controls */
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 26px; }
+  .filters { display: flex; gap: 2px; background: var(--sunk); padding: 3px; border-radius: 9px; }
+  .filters button {
+    border: 0; background: transparent; color: var(--ink-2); cursor: pointer;
+    font: 600 12.5px/1 -apple-system, system-ui, sans-serif;
+    padding: 7px 11px; border-radius: 6px;
+  }
+  .filters button[aria-pressed='true'] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.09); }
+  .search {
+    flex: 1; min-width: 150px; background: var(--card); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 9px; padding: 8px 11px; font-size: 13px;
+  }
+  .search::placeholder { color: var(--ink-3); }
+
+  /* ---------------------------------------------------------------- on deck */
+  .deck {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 12px;
+    padding: 4px 16px 12px; margin-bottom: 34px;
+  }
+  .deck-h {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--ink-3); padding: 12px 0 8px;
+  }
+  .deck-row {
+    display: flex; align-items: baseline; gap: 10px; padding: 7px 0;
+    border-top: 1px solid var(--rule-2); font-size: 13.5px;
+  }
+  .deck-row:first-of-type { border-top: 0; }
+  .deck-row .num { font-size: 11px; font-weight: 700; color: var(--amber); flex: none; width: 24px; }
+  .deck-row .why { margin-left: auto; font-size: 11.5px; color: var(--ink-3); flex: none; padding-left: 12px; }
+
+  /* ---------------------------------------------------------------- epics */
+  .epic { margin-bottom: 40px; scroll-margin-top: 20px; }
+  .epic-head { display: flex; align-items: baseline; gap: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+  .epic-head h2 { font-size: 22px; font-weight: 600; margin: 0; }
+  .epic-head .pfx { color: var(--amber); font-weight: 700; }
+  .epic-head .cnt { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+  .pri {
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em; padding: 3px 6px; border-radius: 5px;
+    background: var(--tint); color: var(--ink-2);
+  }
+  .pri.p0 { color: var(--hold); background: color-mix(in srgb, var(--hold) 13%, transparent); }
+  .pri.p1 { color: var(--amber); background: color-mix(in srgb, var(--amber) 15%, transparent); }
+  .pri.p2 { color: var(--fly); background: color-mix(in srgb, var(--fly) 13%, transparent); }
+  .epic-why { color: var(--ink-2); font-size: 13px; max-width: 68ch; margin: 10px 0 14px; }
+
+  /* task = a row with a state stripe, not a card. Dense enough to scan 60 of them. */
+  .task { border-bottom: 1px solid var(--rule-2); }
+  .task-row {
+    display: flex; align-items: baseline; gap: 11px; width: 100%; text-align: left;
+    background: none; border: 0; color: inherit; cursor: pointer;
+    padding: 11px 10px 11px 12px; margin: 0 -10px 0 -12px; border-radius: 8px;
+    font: inherit; position: relative;
+  }
+  .task-row:hover { background: var(--tint); }
+  .task-row::before {
+    content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2.5px;
+    border-radius: 2px; background: var(--ink-3); opacity: 0.35;
+  }
+  .task.done .task-row::before { background: var(--ship); opacity: 1; }
+  .task.now .task-row::before { background: var(--fly); opacity: 1; }
+  .task.hold .task-row::before { background: var(--hold); opacity: 1; }
+  .num { flex: none; width: 26px; font-size: 11px; font-weight: 700; color: var(--amber); }
+  .t-main { flex: 1; min-width: 0; }
+  .t-title { font-size: 14px; font-weight: 600; }
+  .task.done .t-title { color: var(--ink-2); font-weight: 500; }
+  .t-branch { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+  .t-right { flex: none; display: flex; align-items: center; gap: 7px; }
+  .state {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 3px 7px; border-radius: 5px; background: var(--tint); color: var(--ink-3);
+  }
+  .state.done { color: var(--ship); background: color-mix(in srgb, var(--ship) 13%, transparent); }
+  .state.now { color: var(--fly); background: color-mix(in srgb, var(--fly) 13%, transparent); }
+  .state.hold { color: var(--hold); background: color-mix(in srgb, var(--hold) 13%, transparent); }
+  .size { font-size: 10.5px; font-weight: 700; color: var(--ink-3); width: 12px; text-align: center; }
+  .caret { color: var(--ink-3); font-size: 10px; transition: transform 0.15s ease; }
+  .task[open-panel] .caret { transform: rotate(90deg); }
+
+  .panel { display: none; padding: 2px 0 16px 37px; }
+  .task[open-panel] .panel { display: block; }
+  .panel p { margin: 0 0 10px; font-size: 13px; color: var(--ink-2); max-width: 72ch; }
+  .panel .prs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .panel .prs a {
+    font-size: 11.5px; font-weight: 600; text-decoration: none; padding: 3px 8px; border-radius: 5px;
+    color: var(--ship); background: color-mix(in srgb, var(--ship) 12%, transparent);
+  }
+  .panel .prs a:hover { text-decoration: underline; }
+  .panel .prs .flag { color: var(--hold); background: color-mix(in srgb, var(--hold) 12%, transparent); padding: 3px 8px; border-radius: 5px; font-size: 11.5px; font-weight: 600; }
+  .ac { list-style: none; padding: 0; margin: 0 0 12px; }
+  .ac li { font-size: 12.5px; color: var(--ink-2); padding: 2px 0 2px 18px; position: relative; }
+  .ac li::before { content: '□'; position: absolute; left: 0; color: var(--ink-3); }
+  .task.done .ac li::before { content: '☑'; color: var(--ship); }
+  .panel-actions { display: flex; gap: 8px; }
+  .btn {
+    border: 1px solid var(--rule); background: var(--card); color: var(--ink-2);
+    font: 600 11.5px/1 -apple-system, system-ui, sans-serif;
+    padding: 6px 10px; border-radius: 7px; cursor: pointer;
+  }
+  .btn:hover { color: var(--ink); border-color: var(--ink-3); }
+
+  .empty { color: var(--ink-3); font-size: 13.5px; padding: 30px 0; }
+  .toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(80px);
+    background: var(--ink); color: var(--paper); font-size: 12.5px; font-weight: 600;
+    padding: 9px 16px; border-radius: 9px; transition: transform 0.22s ease; z-index: 20;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  :focus-visible { outline: 2px solid var(--fly); outline-offset: 2px; border-radius: 5px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  @media (max-width: 900px) {
+    .rail { display: none; }
+    .shell { padding: 0 18px 80px; }
+    .mast-in { padding: 16px 18px; }
+    .track { padding: 0 18px 14px; }
+    .mast-stats { width: 100%; margin-left: 0; gap: 22px; }
+    .t-branch, .size { display: none; }
+  }
+</style>
+
+<header class="masthead">
+  <div class="mast-in">
+    <div class="mark"><i></i></div>
+    <div>
+      <h1 class="mast-title display">Arrival — Launch Roadmap</h1>
+      <div class="mast-sub">Demo to App Store, one PR at a time. Ship-blocking work first.</div>
+    </div>
+    <div class="mast-stats mono">
+      <div class="stat ship"><div class="stat-n" id="s-ship">0</div><div class="stat-l">shipped</div></div>
+      <div class="stat"><div class="stat-n" id="s-left">0</div><div class="stat-l">remaining</div></div>
+      <div class="stat hold"><div class="stat-n" id="s-hold">0</div><div class="stat-l">needs you</div></div>
+    </div>
+  </div>
+  <div class="track" id="track"></div>
+</header>
+
+<div class="shell">
+  <nav class="rail">
+    <div class="rail-h">Epics</div>
+    <div id="rail-links"></div>
+    <p class="rail-note">Checkmarks for shipped work are baked in and update as PRs merge. Your own ticks save in this browser.</p>
+  </nav>
+
+  <main>
+    <div class="controls">
+      <div class="filters" role="group" aria-label="Filter tasks">
+        <button data-f="all" aria-pressed="true">All</button>
+        <button data-f="left" aria-pressed="false">Remaining</button>
+        <button data-f="hold" aria-pressed="false">Needs you</button>
+        <button data-f="done" aria-pressed="false">Shipped</button>
+      </div>
+      <input class="search" id="q" type="search" placeholder="Search tasks, branches, scope…" aria-label="Search tasks" />
+    </div>
+
+    <section class="deck" id="deck">
+      <div class="deck-h">On deck — what happens next</div>
+      <div id="deck-rows"></div>
+    </section>
+
+    <div id="epics"></div>
+    <p class="empty" id="empty" hidden>Nothing matches that filter.</p>
+  </main>
+</div>
+
+<div class="toast" id="toast">Copied issue to clipboard</div>
+
+<script>
+const EPICS = [
+  {
+    id: 'delight',
+    prefix: 'D',
+    pri: 'p3', priLabel: 'P3',
+    title: 'Delight & depth',
+    why: 'The layer that makes Arrival feel loved rather than shipped. None of it blocks launch; all of it builds retention. Pick these up between heavier PRs.',
+    tasks: [
+      { id: 'feat/footprints-v2', title: 'Bring back footprint trails as image markers', size: 'M',
+        scope: 'Pre-rendered shoe-print PNGs (per member color, both feet) as Marker image props — no live glyph views.',
+        deps: '⏸ Blocked on YOUR device soak test (roadmap T2) — old-arch dev build must prove stable first',
+        ac: ['Footprints alternate feet along the walked path', 'No profile-photo instability after 10 min of zoom churn', 'Falls back to dotted polyline if image markers misbehave'] },
+      { id: 'feat/recap-share-card', title: 'Shareable arrival recap card', size: 'M', done: true,
+        scope: 'Branded card (mark, session, earned stats, crew facepile) captured via view-shot; share from live recap or any archived session.',
+        deps: '✦ Shipped — PR #12 merged (iOS shares the PNG; Android text fallback until expo-sharing)',
+        ac: ['One tap from recap → OS share sheet with image', 'Card carries brand mark + session name + date', 'Works for both scenarios'] },
+      { id: 'feat/feed-reactions', title: 'Quick reactions on feed events', size: 'M', done: true,
+        scope: 'Long-press a timeline row to react (👍❤️😂🎉); chips stack on the row, first arriver auto-celebrates later arrivals.',
+        deps: '✦ Shipped — PR #13 merged (demo-local; live replication shipped with B6, PR #23)',
+        ac: ['Reaction persists and renders on the row', 'No layout shift in the timeline', 'Realtime replication when M1 lands'] },
+      { id: 'feat/live-activity', title: 'iOS Live Activity / Dynamic Island', size: 'L',
+        scope: 'Glanceable convoy status (ETAs, active stop) while the user navigates in another app. Config-plugin + widget extension.',
+        deps: '⏸ Needs a dev-client/Xcode session — native widget extension can\'t ship from CI alone (eas.json is ready)',
+        ac: ['Live Activity starts/ends with the session', 'Shows nearest-stop + group ETA', 'Dynamic Island compact view'] },
+      { id: 'feat/leader-mode', title: 'Leader mode & waypoint planning', size: 'L',
+        scope: 'Owner pins an ordered set of waypoints pre-trip; members see the shared itinerary and "follow the leader" camera.',
+        ac: ['Waypoints CRUD by owner, visible to all', 'Leader camera mode toggle', 'Spec §9 acceptance'] },
+    ],
+  },
+  {
+    id: 'vertical',
+    prefix: 'V',
+    pri: 'p2', priLabel: 'P2',
+    title: 'Vertical Truth — own the z-axis',
+    why: 'Every competitor’s map is 2D and lies indoors, underground, and on mountains. No mainstream tracker answers "which floor?" — this is Arrival’s wedge. The demo badge UI shipped in PR #3; these wire the real sensors.',
+    tasks: [
+      { id: 'feat/mall-scenario', title: 'Mall demo scenario (vertical showcase)', size: 'M', done: true,
+        scope: 'Hudson Yards food-court convergence from four floors, live level chips, scenario-integrity tests.',
+        deps: '✦ Shipped — PR #7 merged',
+        ac: ['B1/F1/F2/F3 chips live through the demo', 'No stoplights indoors', 'Integrity tests guard all scenarios'] },
+      { id: 'feat/baro-floor-engine', title: 'Barometric floor-delta engine', size: 'M',
+        scope: 'Pressure on every position packet (CMAltimeter / TYPE_PRESSURE); cross-device bias calibration when members are co-located; per-member floor delta. Ships first — powers everything below.',
+        ac: ['Floor delta accurate to ±1 floor in a two-device stairwell test', 'Auto-recalibrates on GPS co-location', 'Degrades to null (never wrong) on devices without a barometer'] },
+      { id: 'feat/floor-badge-live', title: 'Live floor badges on pucks', size: 'S',
+        scope: 'CLLocation.floor in venue-mapped buildings with floor-delta fallback; confidence-gated; desaturate pucks not on your floor.',
+        deps: '✦ Demo badge UI merged (PR #3) + mall demo merged (PR #7); this task wires the real sensors — needs feat/baro-floor-engine',
+        ac: ['Badge appears only above confidence threshold', 'Mall test: two phones two floors apart read B1/F2 correctly', 'Off-floor pucks visually recede'] },
+      { id: 'feat/underground-state', title: 'Underground state + entrance pin', size: 'M',
+        scope: 'Fused detector (GPS accuracy collapse + baro descent + transit/parking POI proximity) pins the puck at last good fix: "entered P2 Garage, 3:41". Resurface event on fix recovery.',
+        ac: ['Subway entry detected within 30 s', 'Puck shows entrance pin + time, not a stale wandering dot', 'Feed event on resurface'] },
+      { id: 'feat/altitude-gated-arrivals', title: 'Altitude-gated arrival geofences', size: 'S',
+        scope: 'Arrival confirmation requires horizontal geofence AND vertical agreement — kills the overpass / parking-deck false "arrived".',
+        ac: ['Driving over the destination on a highway overpass does not fire arrival', 'Garage level beneath a venue does not fire until vertical agreement'] },
+      { id: 'feat/parked-car-pin', title: 'Parked-car pin with garage level', size: 'M',
+        scope: 'Auto-drop a pin on the driving→walking activity transition; level from baro delta since garage entry; new parked_car stop kind with nav deep-link.',
+        ac: ['Pin drops without user action on parking', 'Shows garage level when underground', 'Navigate walks you back to the car'] },
+      { id: 'feat/hike-mode', title: 'Hike mode: elevation-aware sessions', size: 'M',
+        scope: 'Fused GPS+baro altitude per trail vertex: gain/loss stats, climb/descend badges, Tobler-adjusted ETAs, recap elevation profile, "400 ft above you" on member cards.',
+        ac: ['Elevation profile in the recap', 'ETA accounts for grade (Tobler)', 'Relative altitude line on member cards'] },
+    ],
+  },
+  {
+    id: 'guardian',
+    prefix: 'G',
+    pri: 'p2', priLabel: 'P2',
+    title: 'Guardian Loop — kids & care',
+    why: 'Converts a group toy into something a parent relies on. Detection runs on the kid’s device via OS primitives (geofences, activity recognition), not on a parent staring at a dot.',
+    tasks: [
+      { id: 'feat/battery-telemetry', title: 'Battery telemetry + dying-phone flare', size: 'S',
+        scope: 'Battery % on position packets and rail chips; pushes at 20/10%; at 5% a durable last-known snapshot (position, floor, heading, activity). Dark pucks carry reason codes: died / underground / unshared / no signal.',
+        ac: ['Parent sees kid battery % at a glance', 'Dying phone fires a push before it goes dark', 'A dark puck always says WHY it’s dark'] },
+      { id: 'feat/watch-zones', title: 'Watch zones', size: 'S',
+        scope: 'Parent-drawn zone syncs to the kid’s device; OS geofencing (CLCircularRegion / GeofencingClient) fires exit/enter while backgrounded; push to parent, local notice to kid.',
+        ac: ['Exit alert lands within 60 s, app backgrounded', 'Kid sees the same zones (transparency, not surveillance)', 'Server-side PostGIS fallback when OS geofence is unavailable'] },
+      { id: 'feat/smart-checkin', title: 'Smart check-in', size: 'M',
+        scope: 'Parent ping → time-sensitive push with lock-screen "I’m OK" action; auto-trigger on odd dwell (stopped >N min at a non-place); 2-min no-ack escalates to max-rate sampling + status panel.',
+        ac: ['Kid can acknowledge from the lock screen in one tap', 'Escalation path visibly changes tracking state', 'Auto-trigger has a low false-positive rate (Places-gated)'] },
+      { id: 'feat/unexpected-ride-alert', title: 'Unexpected-ride alert', size: 'M',
+        scope: 'Activity recognition detects a kid member entering a vehicle with no adult member co-moving within 30 m → high-priority push with the transition point pinned. Adult/kid roles on membership; expected-ride windows to mute it.',
+        deps: 'Only possible because sessions are group-scoped — single-user trackers can’t do this',
+        ac: ['Test: kid device driven off without adult → alert with pinned transition point', 'Expected-ride window suppresses it', 'Role flag settable by session owner'] },
+      { id: 'feat/kid-sos', title: 'Kid SOS', size: 'S',
+        scope: 'Long-press-armed SOS + lock-screen widget: max sampling, DND-bypassing push to all adults, parent auto-follow mode, reassurance screen on the kid’s device; persists until a parent clears it.',
+        ac: ['SOS reaches parents through Do Not Disturb', 'Parent map auto-follows the kid', 'Can’t be cleared from the kid device once fired'] },
+      { id: 'feat/pickup-choreography', title: 'Pickup choreography', size: 'S',
+        scope: 'Promote any stop to a pickup point: kid-side geofence entry/exit events, "leave now" nudge timed to the kid’s walking ETA vs parent driving ETA, auto "reunited" on mutual geofence entry.',
+        ac: ['Parent gets "leave now" at the right moment', 'Reunited fires automatically', 'Works school-run distances (2–15 min)'] },
+      { id: 'feat/security-handoff-card', title: 'Security handoff card', size: 'M',
+        scope: 'Lost-kid moment: one-tap shareable image — photo, "wearing" note, last position + floor + heading + battery/underground context — via the OS share sheet; auto-arms SOS follow mode.',
+        ac: ['Card generated in <3 s from the member card', 'Contains floor/underground context, not just lat/lng', 'Share sheet to security/staff without them installing anything'] },
+    ],
+  },
+  {
+    id: 'coordination',
+    prefix: 'C',
+    pri: 'p2', priLabel: 'P2',
+    title: 'Richer coordination',
+    why: 'The features that make the map useful beyond watching dots move — finding places, getting told when things happen, and trusting ETAs.',
+    tasks: [
+      { id: 'feat/session-archive', title: 'Session archive + read-only track view', size: 'M', done: true,
+        scope: 'Auto-archive on completion; Home list; read-only decluttered map with all traces; NYC walk pre-seeded.',
+        deps: '✦ Shipped — PR #8 merged',
+        ac: ['Traces saved with steps + arrival order', 'POIs/shops stripped in the archive view', 'Idempotent NYC seed'] },
+      { id: 'feat/place-search', title: 'Place search & POI selection', size: 'M',
+        scope: 'Google Places autocomplete behind a Supabase edge proxy (key never ships in the app); POI tap → place sheet.',
+        deps: 'Needs supabase-setup (P1)',
+        ac: ['Search-as-you-type with debounce + cache', 'Selecting a result opens the place sheet at that location', 'API key only in edge function env'] },
+      { id: 'feat/nav-deeplinks', title: 'Navigate button → Google/Waze/Apple Maps', size: 'S', done: true,
+        scope: 'lib/nav-deeplinks.ts URL builders; Navigate action on destination, stops, and suggestions.',
+        deps: '✦ Shipped — PR #2 merged (Navigate pill on stop cards + tappable destination)',
+        ac: ['Opens the user’s installed nav app with the exact pin', 'Falls back to Apple/Google Maps web URL', 'Works from stop cards and the place sheet'] },
+      { id: 'feat/push-notifications', title: 'Push notifications', size: 'M',
+        scope: 'expo-notifications + Expo Push: stop posted, suggestion confirmed, member arrived, session ending in 15 min.',
+        deps: 'Needs realtime backend (P1)',
+        ac: ['Permission prompt deferred to first meaningful moment (joining an active session)', 'Each event type can be toggled in settings', 'Deep-links into the session on tap'] },
+      { id: 'feat/arrival-geofences', title: 'Arrival detection via geofences', size: 'M',
+        scope: 'expo-location geofences on destination + confirmed stops; entering posts the feed event and flips member state.',
+        ac: ['Arrival fires within 60 s of geofence entry', 'No false positives from GPS drift (radius + dwell)', 'Feed + push on arrival'] },
+      { id: 'feat/eta-service', title: 'Real ETAs via Routes API', size: 'M',
+        scope: 'Edge cron recomputes each moving member’s ETA every ~2 min with traffic; straight-line fallback offline.',
+        deps: 'Needs supabase-setup (P1)',
+        ac: ['ETA within ±10% of Google Maps for a test drive', 'Adaptive recompute interval (farther = less frequent)', 'Cost: ≤1 Routes call / member / 2 min'] },
+      { id: 'feat/stale-members', title: 'Stale & offline member handling', size: 'S',
+        scope: '"Last seen 4m ago" badge past freshness thresholds; never silently drop a member from the map.',
+        ac: ['Badge appears at >45 s background / >10 s foreground staleness', 'Marker dims but stays at last position', 'Recovers cleanly on reconnect'] },
+    ],
+  },
+  {
+    id: 'accounts',
+    prefix: 'A',
+    pri: 'p2', priLabel: 'P2',
+    title: 'Accounts & identity',
+    why: 'Real people need real identities before strangers share their location: sign-in, profiles, and the trust furniture around them.',
+    tasks: [
+      { id: 'feat/auth', title: 'Sign in with Apple / Google + email fallback', size: 'M',
+        scope: 'Supabase Auth; Apple sign-in is an App Store requirement when offering third-party login.',
+        deps: 'Needs supabase-setup (P1)',
+        ac: ['All three providers issue a session that survives app restart', 'Sign in with Apple present (App Review requirement)', 'Auth state drives expo-router guards'] },
+      { id: 'feat/profiles', title: 'Profiles: name + avatar upload', size: 'M',
+        scope: 'Display name, photo upload to Supabase Storage with resize; avatar falls back to color initial.',
+        ac: ['Avatar uploads compress to ≤200 KB', 'Photo renders in marker, rail, card, timeline', 'Profanity/URL check on display names'] },
+      { id: 'feat/session-history', title: 'Session history list', size: 'S',
+        scope: 'Past sessions on the home screen (name, date, members, your steps) reading from Postgres.',
+        ac: ['Completed sessions listed newest-first', 'Tapping shows the frozen summary view', 'No position history retained (privacy: last-known only)'] },
+      { id: 'feat/account-deletion', title: 'In-app account deletion', size: 'S',
+        scope: 'Settings → delete account: removes auth user, memberships, profile media. Apple requires this for any app with accounts.',
+        ac: ['Deletion completes without support contact', 'All personal rows + storage objects removed', 'Confirmation with cooling-off warning'] },
+    ],
+  },
+  {
+    id: 'honest',
+    prefix: 'H',
+    pri: 'p1', priLabel: 'P1',
+    title: 'Honest Map — trust when GPS fails',
+    why: 'A live map people rely on in exactly the moments GPS quits: honest uncertainty during dropouts, and phone-to-phone convergence for the last hundred feet.',
+    tasks: [
+      { id: 'feat/backfill-staleness', title: 'Store-and-forward backfill + staleness ring', size: 'S',
+        scope: 'Ring buffer of samples during connectivity outages; batch upsert + trail splice on reconnect. Puck grows an uncertainty ring with age × last speed instead of sitting confidently wrong.',
+        deps: 'Prerequisite for underground/mountain trust; pairs with feat/underground-state',
+        ac: ['Airplane-mode walk backfills the trail seamlessly on reconnect', 'Stale puck visibly reads as stale (ring, dimming, "last seen")', 'No teleport jumps after splice'] },
+      { id: 'feat/last-100ft-finder', title: 'Last-100-feet finder', size: 'L',
+        scope: 'Mutual "Find mode": session-scoped BLE advertise/scan → RSSI hot/cold proximity meter with baro floor hint; UWB tier (NISession / androidx.core.uwb) gives a distance + bearing arrow on capable phones.',
+        ac: ['Hot/cold meter converges on a person in a crowded hall', 'Floor hint says "they’re a level above you"', 'UWB arrow on supported hardware pairs'] },
+    ],
+  },
+  {
+    id: 'backend',
+    prefix: 'B',
+    pri: 'p1', priLabel: 'P1',
+    title: 'Live backend (M1) — sim becomes real',
+    why: 'The core promise: two phones see each other move. Everything in this epic replaces the simulation with Supabase while keeping the UI you already have.',
+    tasks: [
+      { id: 'infra/supabase-setup', title: 'Supabase project: schema, RLS, CI migrations', size: 'M', done: true,
+        scope: 'SPEC §5.2 schema + RLS + join/create RPCs; CI applies migrations to real Postgres and smokes the RPCs on every PR.',
+        deps: '✦ Shipped — PR #16 merged; live project migrated + verified',
+        ac: ['RLS: only members read/write their trip’s rows', 'Migrations apply from zero in CI', 'RPC smoke passes in CI'] },
+      { id: 'feat/session-crud', title: 'Session create / join / leave / expiry', size: 'M', done: true,
+        scope: 'Create mints a server-side join code via create_trip; Home joins by code via join_trip; demo fallback behind the config gate; verify-backend script proves the whole flow + RLS.',
+        deps: '✦ Shipped — PR #17 merged; verify-backend green against the live project',
+        ac: ['Create → session row + owner membership + color assignment', 'Join enforces cap/lock/expiry server-side', 'Non-members blind to the trip (RLS-verified)'] },
+      { id: 'feat/invite-links', title: 'Invite links & join flow', size: 'L',
+        scope: 'Join codes, arrival.app universal links, join/[code] preview screen, 12-member cap, owner lock + regenerate (F1a).',
+        deps: 'feat/session-crud',
+        ac: ['Link opens preview card; joining requires explicit confirm', 'Universal Links verified on iOS + App Links on Android', 'Full session shows "Session is full"; dead links show "ended"'] },
+      { id: 'feat/realtime-positions', title: 'Realtime position pipeline', size: 'L', done: true,
+        scope: 'Private trip:{id} broadcast channel (RLS-authorized), GPS publish @3s + 30s snapshots, roster/feed via postgres_changes, live trails/ETAs/steps; verify-backend proves a 2-user realtime round-trip (10/10).',
+        deps: '✦ Shipped — PR #19 merged. YOUR acceptance test: two phones, one link, walk around',
+        ac: ['Two devices see each other move at ≤10 s staleness', 'Late joiner hydrates from snapshots', 'Non-members cannot join or listen to the channel (RLS)'] },
+      { id: 'feat/background-tracking', title: 'Background tracking + adaptive lifecycle', size: 'L',
+        scope: 'expo-task-manager background updates; speed-adaptive sampling and the stationary low-power downshift (§5.4).',
+        deps: 'feat/realtime-positions, needs dev client',
+        ac: ['Position keeps flowing with app backgrounded on both platforms', 'Battery ≤8%/hr moving on a mid-tier Android', 'Long-idle nudge after 60 min stationary'] },
+      { id: 'feat/stops-live', title: 'Stops, suggestions & votes on the wire', size: 'M', done: true,
+        scope: 'Stops/votes/joins/reactions over Postgres + postgres_changes; server triggers own the rules (creator auto-upvote, 2-vote confirm, feed events); toggle_reaction RPC.',
+        deps: '✦ Shipped — PR #23 (17/17 live verification checks incl. confirm trigger + RLS negative)',
+        ac: ['Stop posted on phone A renders on phone B < 2 s', 'Vote counts consistent after reconnect', 'Feed events written server-side'] },
+    ],
+  },
+  {
+    id: 'store',
+    prefix: 'S',
+    pri: 'p0', priLabel: 'P0',
+    title: 'App Store readiness',
+    why: 'Location apps get extra review scrutiny. This epic is everything Apple and Google will actually check — none of it is optional, and half of it has lead time. Start the review-sensitive items early.',
+    tasks: [
+      { id: 'infra/eas-builds', title: 'EAS Build + dev client + TestFlight pipeline', size: 'M',
+        scope: 'Build profiles (dev/preview/prod), dev client with newArchEnabled:false, TestFlight internal + Play internal testing tracks.',
+        deps: '✦ eas.json profiles merged (PR #11); credentials + first builds need your Apple/Google accounts',
+        ac: ['One-command preview build lands on TestFlight', 'Dev client runs the app with maps + background location', 'EAS Update channel per profile'] },
+      { id: 'feat/permissions-disclosure', title: 'Location permission education & disclosure', size: 'M',
+        scope: 'Pre-permission explainer screen (why background location, session-scoped), NSLocation* strings, Play prominent-disclosure flow + declaration video (§7).',
+        ac: ['Disclosure shown BEFORE any OS permission prompt', 'Copy explains auto-stop at session end', 'Play Console background-location declaration drafted + demo video recorded'] },
+      { id: 'legal/privacy', title: 'Privacy policy, nutrition labels, data retention', size: 'M',
+        scope: 'Hosted privacy policy, App Privacy questionnaire (precise location, identifiers), Play Data Safety form; document last-known-only position retention.',
+        deps: '✦ Draft policy merged (PR #11, docs/PRIVACY.md — needs legal review + hosting); labels/forms remain',
+        ac: ['Policy URL live and linked in both store listings + app settings', 'Labels match actual SDK data flows (audit expo/Supabase SDKs)', 'Retention statement: no position history in v1'] },
+      { id: 'store/assets', title: 'Store listing assets', size: 'M',
+        scope: 'Screenshots (6.7" + 6.1" + iPad if supportsTablet stays true), preview video of the live map, descriptions, keywords.',
+        ac: ['Screenshots show real product UI (map, rail, trails, recap)', 'Preview video ≤30 s, captures the invite→converge arc', 'Description passes trademark check (no "Find My" phrasing)'] },
+      { id: 'store/review-notes', title: 'App Review notes + demo session', size: 'S', done: true,
+        scope: 'Reviewer-facing notes explaining session-scoped tracking, solo demo path, rejection playbook — docs/REVIEW_NOTES.md.',
+        deps: '✦ Shipped — PR #11 merged',
+        ac: ['Review notes explain background location trigger + auto-stop', 'Demo path documented for solo review', 'Rejection-response playbook drafted for 2.5.4/5.1.1/5.1.2/4.2'] },
+      { id: 'infra/crash-telemetry', title: 'Crash reporting & release health', size: 'S',
+        scope: 'Sentry (expo plugin) with source maps via EAS; release health dashboard before public TestFlight.',
+        ac: ['A thrown test error appears symbolicated in Sentry', 'Crash-free-session rate visible per release', 'PII scrubbing on (no coordinates in breadcrumbs)'] },
+    ],
+  },
+  {
+    id: 'stability',
+    prefix: 'T',
+    pri: 'p0', priLabel: 'P0',
+    title: 'Stability & correctness — ships first',
+    why: 'You said it yourself: it needs to work flawlessly. This epic locks in the marker-stability work, puts tests around the map, and makes regressions impossible to miss. Highest priority on the page.',
+    tasks: [
+      { id: 'test/unit-foundation', title: 'Unit-test foundation + refactor into pure modules', size: 'M', done: true,
+        scope: 'jest-expo; logic extracted to lib/ modules (format, trail, clusters, convergence, lights, archive); 84 tests.',
+        deps: '✦ Shipped — PR #6 merged (convention: every logic PR ships tests)',
+        ac: ['npm test green', 'Components hold no testable logic', 'Scenario-integrity net in place'] },
+      { id: 'fix/marker-stability-validation', title: 'Validate marker stability on device', size: 'S',
+        scope: 'Dev build (old arch) soak test: 15 min of trails-on zoom churn across both scenarios; document results; decide if PROVIDER_GOOGLE fallback flag is needed.',
+        deps: 'Watch react-native-maps #5911 / PR #5938 for the real fix',
+        ac: ['Zero photo dropouts in a 15-min soak on iPhone hardware', 'Findings recorded in SPEC §10.4', 'Go/no-go on Google-provider fallback flag'] },
+      { id: 'perf/render-pass', title: 'Render performance pass', size: 'M', done: true,
+        scope: 'Markers/rail chips/ring dots/feed rows/stop cards memoized on exactly what they draw; tick 250ms → 1s once everyone arrives.',
+        deps: '✦ Shipped — PR #10 merged (on-device FPS profiling still worth a pass with your soak test)',
+        ac: ['≤1 re-rendered marker per tick per moving member', 'JS FPS ≥55 with trails on and dock open', 'Tick drops to 1 Hz when all members idle'] },
+      { id: 'test/e2e-smoke', title: 'E2E smoke suite (Maestro)', size: 'M',
+        scope: 'Flows: create session → trails toggle → select member → retrace → recap; runs on simulator in CI.',
+        ac: ['Suite green on main in <8 min', 'Fails on the known marker regressions (screenshot assertions)', 'Runs nightly against the dev build'] },
+      { id: 'infra/ci', title: 'CI: typecheck, lint, test on every PR', size: 'S', done: true,
+        scope: 'GitHub Actions: tsc --noEmit, eslint (flat config), jest — one job on every PR and main push.',
+        deps: '✦ Shipped — PRs #4 + #9 merged (E2E lane lives in test/e2e-smoke)',
+        ac: ['Red PR on type or lint error', 'Branch protection requires green checks', 'CI < 5 min for the fast lane'] },
+      { id: 'fix/error-boundaries', title: 'Error boundaries & empty states', size: 'S',
+        scope: 'Screen-level boundaries with recovery UI; defined empty/loading states for every surface before real network data arrives.',
+        deps: '✦ Root boundary + recovery screen merged (PR #5); designed empty states remain',
+        ac: ['A thrown render error shows recovery UI, not a white screen', 'Airplane-mode session shows stale badges, not spinners forever', 'All lists have designed empty states'] },
+    ],
+  },
+  {
+    id: 'fieldtest',
+    prefix: 'F',
+    pri: 'p0', priLabel: 'P0',
+    title: 'Field-test fixes — everything the two-phone tests found',
+    why: 'Work that came out of Paul testing on real hardware with two iPhones. Nothing here was on the plan; all of it was a real defect or a gap the demo hid. Kept as a numbered epic so the fixes are traceable to the PRs that shipped them.',
+    tasks: [
+      { id: 'fix/live-roster-resilience', title: 'Joiners can never stay invisible to the host', size: 'M', done: true,
+        scope: 'Host saw "someone joined" but no puck. Layered delivery so no single realtime path failure blinds anyone: broadcast (3s) → fresher-wins snapshot merge (10s) → trip_members UPDATE subscription → 15s roster poll; unknown-sender recovery; send failures surfaced once.',
+        deps: '✦ Shipped — <a href="https://github.com/pdev8/arrival/pull/24" target="_blank">PR #24</a>',
+        ac: ['A joiner appears on the host map within 15s worst case', 'Broadcast send failure surfaces once, then degrades to snapshots', 'No silent realtime failure modes'] },
+      { id: 'fix/select-zoom', title: 'Select-from-rail zooms on Apple Maps', size: 'S', done: true,
+        scope: 'Tapping a chip while zoomed out added a duplicate puck instead of zooming. Apple Maps ignores camera.zoom — it needs altitude. Selected member no longer duplicates into the facepile.',
+        deps: '✦ Shipped — <a href="https://github.com/pdev8/arrival/pull/25" target="_blank">PR #25</a>',
+        ac: ['Selecting from any zoom level flies the camera to that member', 'No duplicate avatar/circle appears'] },
+      { id: 'feat/invite-copy-link', title: 'Invite panel: copy link, copy code, share', size: 'S', done: true,
+        scope: 'Big tappable join code, Copy-link primary with "Copied ✓" feedback (expo-clipboard), Share… secondary.',
+        deps: '✦ Shipped — <a href="https://github.com/pdev8/arrival/pull/26" target="_blank">PR #26</a>',
+        ac: ['Copy link puts a working invite on the clipboard', 'Code copies with one tap'] },
+      { id: 'fix/sheet-anchoring', title: 'Bottom sheets anchor flush — no ghost panel', size: 'S', done: true,
+        scope: 'Three rounds: flush anchoring (PR #27), hiding the dock/rail/fabs behind sheets (PR #28), and finally the real culprit — the 30% backdrop dim itself was the "ghost panel" (PR #29). Sheets now rise over the map with an invisible tap-to-close backdrop.',
+        deps: '✦ Shipped — <a href="https://github.com/pdev8/arrival/pull/27" target="_blank">PR #27</a>, <a href="https://github.com/pdev8/arrival/pull/28" target="_blank">#28</a>, <a href="https://github.com/pdev8/arrival/pull/29" target="_blank">#29</a>',
+        ac: ['No translucent rectangle above the sheet', 'Bottom corners never visible', 'Tap outside closes'] },
+      { id: 'feat/departure-semantics', title: 'Members never fall off the map', size: 'M', done: true,
+        scope: 'Leaving marks left_at instead of deleting the row (migration 0004 + on_member_left trigger). Departed members freeze dimmed at their last known position, show "left" in the rail and "Left — last known position" on the card, are excluded from convergence/allArrived, and their trails flow into the archive.',
+        deps: '✦ Shipped — <a href="https://github.com/pdev8/arrival/pull/30" target="_blank">PR #30</a>',
+        ac: ['A member who leaves stays on the map, dimmed, at their last position', 'Archive keeps their trail', 'They do not block "everyone arrived"'] },
+      { id: 'fix/marker-drops', title: 'Markers stop dropping when switching profiles', size: 'L', done: true,
+        scope: 'The long one — four takes against rn-maps #5911 (Apple Maps + New Arch loses custom marker views on ANY lifecycle event). Removed opacity flips and selection-driven regrouping (#31), removed the -sel remount "self-heal" that caused a 3-5s blink on every Close (#32), then killed churn entirely: live sessions skip clustering (pucks mount once at roster load, never unmount or hide) and a 5s repaintTick prop nudges any natively-lost view back into existence.',
+        deps: '✦ Shipped — <a href="https://github.com/pdev8/arrival/pull/31" target="_blank">PR #31</a>, <a href="https://github.com/pdev8/arrival/pull/32" target="_blank">#32</a> — verified on device. Facepiles remain demo-only.',
+        ac: ['Rapid profile switching never drops a puck', 'No blink on Close', 'A lost view self-heals within 5s'] },
+      { id: 'ui/uniform-member-surface', title: 'Uniform member surface + readable ETAs', size: 'M', done: true,
+        scope: 'Rail chips and the full-width card share one fixed height (MEMBER_SURFACE_H), so no member state — departed, arrived, long name — changes the footprint; every line truncates instead of wrapping. ETA reads m:ss → "1:15 hr" past an hour → "5.1 days" past a day. Surfaces scaled +10% after device feedback.',
+        deps: '✦ Shipped — <a href="https://github.com/pdev8/arrival/pull/34" target="_blank">PR #34</a>',
+        ac: ['Bottom stack never shifts when selecting/closing', 'Long names truncate, never resize the card', 'Multi-day ETAs stay legible'] },
+      { id: 'feat/member-pager', title: 'Swipeable member deck, ordered you → fastest → left', size: 'M', done: true,
+        scope: 'The detail view is a paging card deck: swipe left/right between members, each landing focuses that member (camera follows). Order is you first, then fastest ETA, departed last — shared with the rail via sortMembers. Rail ⇄ deck cross-fades. Deck order freezes while open so live ETA crossings cannot reorder pages mid-swipe.',
+        deps: '✦ Shipped — <a href="https://github.com/pdev8/arrival/pull/35" target="_blank">PR #35</a>',
+        ac: ['Swipe pages through every member', 'Camera chases the active page', 'Order: you, fastest → slowest, departed last'] },
+      { id: 'ui/dock-flush', title: 'Activity dock flush; cards slide away when it opens', size: 'S', done: true,
+        scope: 'Dock spans edge-to-edge and sits flush on the screen bottom (bottom corners squared, matching the invite sheet). Expanding it springs the member surface fully out of view; collapsing brings it back.',
+        deps: '✦ Shipped — <a href="https://github.com/pdev8/arrival/pull/36" target="_blank">PR #36</a>',
+        ac: ['No visible bottom corners or side gaps', 'Member cards leave the screen while the dock is expanded'] },
+      { id: 'chore/refactor-tests', title: 'Live motion logic extracted to pure helpers', size: 'M',
+        scope: 'The fresher-wins snapshot merge, broadcast apply, and tracked → SimMember motion mapping were inline in useLiveTrip and untestable without a Supabase channel. Now pure functions (mergeSnapshot, applyBroadcast, simMotion) with 15 tests; MemberCard memoized so the 4 Hz tick stops re-rendering every page of the deck. 181 tests.',
+        deps: 'Branch chore/refactor-tests — awaiting your on-device pass, then PR',
+        ac: ['Stale snapshots never clobber live positions (tested)', 'Arrival latches (tested)', 'No behavior change on device'] },
+    ],
+  },
+];
+
+/* Priority order is the read order: ship-blocking first. */
+const RANK = { p0: 0, p1: 1, p2: 2, p3: 3 };
+EPICS.sort((a, b) => RANK[a.pri] - RANK[b.pri]);
+EPICS.forEach((e) => e.tasks.forEach((t, i) => {
+  t.num = `${e.prefix}${i + 1}`;
+  t.epic = e;
+  /* a task's state: shipped, in flight, waiting on Paul, or open */
+  const d = (t.deps || '') + ' ' + (t.scope || '');
+  t.state = t.done ? 'done'
+    : /YOUR|Your |your on-device|awaiting your|Blocked on YOUR/.test(d) ? 'hold'
+    : /In progress|Branch |⏸|Root boundary|Demo badge/.test(d) ? 'now'
+    : 'open';
+}));
+
+const ALL = EPICS.flatMap((e) => e.tasks);
+const KEY = 'arrival-roadmap-v1';
+const ticks = JSON.parse(localStorage.getItem(KEY) || '{}');
+const isDone = (t) => t.state === 'done' || !!ticks[t.id];
+
+const LABEL = { done: 'shipped', now: 'in flight', hold: 'needs you', open: '' };
+
+/* ------------------------------------------------------------------ render */
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/* deps carry PR links as raw anchors — keep them, they're the paper trail */
+const prLinks = (deps) => {
+  if (!deps) return '';
+  const anchors = deps.match(/<a [^>]*>.*?<\/a>/g);
+  if (anchors) return `<div class="prs">${anchors.join('')}</div>`;
+  return `<div class="prs"><span class="flag">${esc(deps.replace(/^[✦⏸]\s*/, ''))}</span></div>`;
+};
+
+const epicsEl = document.getElementById('epics');
+for (const epic of EPICS) {
+  const sec = document.createElement('section');
+  sec.className = 'epic';
+  sec.id = epic.id;
+  sec.innerHTML = `
+    <div class="epic-head">
+      <span class="pri ${epic.pri}">${epic.priLabel}</span>
+      <h2 class="display"><span class="pfx">${epic.prefix}</span> ${epic.title}</h2>
+      <span class="cnt mono" data-cnt="${epic.id}"></span>
+    </div>
+    <p class="epic-why">${epic.why}</p>`;
+
+  for (const t of epic.tasks) {
+    const done = isDone(t);
+    const state = done ? 'done' : t.state;
+    const el = document.createElement('div');
+    el.className = 'task ' + state;
+    el.dataset.id = t.id;
+    el.dataset.state = state;
+    el.dataset.hay = (t.num + ' ' + t.title + ' ' + t.id + ' ' + t.scope).toLowerCase();
+    el.innerHTML = `
+      <button class="task-row" aria-expanded="false">
+        <span class="num mono">${t.num}</span>
+        <span class="t-main">
+          <span class="t-title">${esc(t.title)}</span>
+          <span class="t-branch mono">${esc(t.id)}</span>
+        </span>
+        <span class="t-right">
+          ${LABEL[state] ? `<span class="state ${state}">${LABEL[state]}</span>` : ''}
+          <span class="size mono">${t.size}</span>
+          <span class="caret">▸</span>
+        </span>
+      </button>
+      <div class="panel">
+        <p>${esc(t.scope)}</p>
+        ${prLinks(t.deps)}
+        <ul class="ac">${t.ac.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>
+        <div class="panel-actions">
+          <button class="btn" data-copy>Copy as GitHub issue</button>
+          ${t.done ? '' : `<button class="btn" data-tick>${ticks[t.id] ? 'Untick' : 'Mark done'}</button>`}
+        </div>
+      </div>`;
+
+    el.querySelector('.task-row').addEventListener('click', () => {
+      const open = el.hasAttribute('open-panel');
+      el.toggleAttribute('open-panel', !open);
+      el.querySelector('.task-row').setAttribute('aria-expanded', String(!open));
+    });
+    el.querySelector('[data-copy]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const md = `### ${t.num} — ${t.title}\n\n**Branch:** \`${t.id}\`  ·  **Epic:** ${epic.title}  ·  **Priority:** ${epic.priLabel}  ·  **Size:** ${t.size}\n\n${t.scope}\n\n**Acceptance criteria**\n${t.ac.map((a) => `- [ ] ${a}`).join('\n')}\n`;
+      navigator.clipboard.writeText(md).then(toast);
+    });
+    const tick = el.querySelector('[data-tick]');
+    if (tick) tick.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (ticks[t.id]) delete ticks[t.id]; else ticks[t.id] = 1;
+      localStorage.setItem(KEY, JSON.stringify(ticks));
+      const now = isDone(t) ? 'done' : t.state;
+      el.className = 'task ' + now;
+      el.dataset.state = now;
+      const s = el.querySelector('.state');
+      if (s) { s.className = 'state ' + now; s.textContent = LABEL[now]; }
+      tick.textContent = ticks[t.id] ? 'Untick' : 'Mark done';
+      paint();
+    });
+    sec.appendChild(el);
+  }
+  epicsEl.appendChild(sec);
+}
+
+/* rail + track + counters ------------------------------------------------- */
+const railEl = document.getElementById('rail-links');
+const trackEl = document.getElementById('track');
+for (const epic of EPICS) {
+  const a = document.createElement('a');
+  a.href = '#' + epic.id;
+  a.innerHTML = `<span class="pfx mono">${epic.prefix}</span> <span>${epic.title.split(' — ')[0]}</span> <span class="cnt mono" data-railcnt="${epic.id}"></span>`;
+  railEl.appendChild(a);
+
+  const g = document.createElement('div');
+  g.className = 'track-epic';
+  g.style.setProperty('--n', epic.tasks.length);
+  g.title = epic.title;
+  g.innerHTML = epic.tasks.map((t) => `<i class="seg" data-seg="${t.id}"></i>`).join('');
+  trackEl.appendChild(g);
+}
+
+function paint() {
+  let done = 0, hold = 0;
+  for (const t of ALL) {
+    const d = isDone(t);
+    if (d) done++;
+    else if (t.state === 'hold') hold++;
+    const seg = trackEl.querySelector(`[data-seg="${CSS.escape(t.id)}"]`);
+    seg.className = 'seg' + (d ? ' done' : t.state === 'now' || t.state === 'hold' ? ' now' : '');
+  }
+  document.getElementById('s-ship').textContent = done;
+  document.getElementById('s-left').textContent = ALL.length - done;
+  document.getElementById('s-hold').textContent = hold;
+  for (const epic of EPICS) {
+    const d = epic.tasks.filter(isDone).length;
+    const txt = `${d}/${epic.tasks.length}`;
+    document.querySelector(`[data-cnt="${epic.id}"]`).textContent = txt;
+    document.querySelector(`[data-railcnt="${epic.id}"]`).textContent = txt;
+  }
+  deck();
+}
+
+/* on deck: what Paul is blocking, then the next unblocked tasks by priority */
+function deck() {
+  const rows = document.getElementById('deck-rows');
+  const held = ALL.filter((t) => !isDone(t) && t.state === 'hold');
+  const next = ALL.filter((t) => !isDone(t) && t.state !== 'hold').slice(0, 4);
+  const line = (t, why) => `
+    <div class="deck-row">
+      <span class="num mono">${t.num}</span>
+      <span>${esc(t.title)}</span>
+      <span class="why">${why}</span>
+    </div>`;
+  rows.innerHTML =
+    held.map((t) => line(t, 'waiting on you')).join('') +
+    next.map((t) => line(t, t.epic.priLabel + ' · ' + t.size)).join('');
+}
+
+/* filter + search --------------------------------------------------------- */
+let filter = 'all';
+let query = '';
+function apply() {
+  let shown = 0;
+  for (const el of document.querySelectorAll('.task')) {
+    const st = el.dataset.state;
+    const okF =
+      filter === 'all' ? true :
+      filter === 'done' ? st === 'done' :
+      filter === 'hold' ? st === 'hold' :
+      st !== 'done';
+    const okQ = !query || el.dataset.hay.includes(query);
+    const show = okF && okQ;
+    el.hidden = !show;
+    if (show) shown++;
+  }
+  for (const sec of document.querySelectorAll('.epic')) {
+    sec.hidden = !sec.querySelector('.task:not([hidden])');
+  }
+  document.getElementById('deck').hidden = filter !== 'all' || !!query;
+  document.getElementById('empty').hidden = shown > 0;
+}
+for (const b of document.querySelectorAll('.filters button')) {
+  b.addEventListener('click', () => {
+    filter = b.dataset.f;
+    for (const o of document.querySelectorAll('.filters button')) o.setAttribute('aria-pressed', String(o === b));
+    apply();
+  });
+}
+document.getElementById('q').addEventListener('input', (e) => {
+  query = e.target.value.trim().toLowerCase();
+  apply();
+});
+
+let toastT;
+function toast() {
+  const el = document.getElementById('toast');
+  el.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove('show'), 1600);
+}
+
+paint();
+apply();
+</script>
