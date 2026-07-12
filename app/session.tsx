@@ -210,14 +210,16 @@ export default function SessionScreen() {
         ))}
 
         {/* clustered members are NOT mounted (conditional render, no opacity
-            flips): avatars are local so remounts are flash-free, and a
-            freshly mounted view can't be a #5911-dropped one. '-sel' in the
-            key remounts markers across selection transitions as a self-heal. */}
+            flips — the #5911 drop trigger removed in PR #31). Keys are STABLE
+            across selection: the old '-sel' remount "self-heal" caused a
+            3-5s blank window on every deselect, because a freshly inserted
+            marker on New Arch often doesn't paint until its next prop update
+            (which arrives with the next 3s position packet). */}
         {sim.members
           .filter((m) => !hiddenIds.has(m.id))
           .map((m) => (
             <MemberMarker
-              key={`${m.id}${m.id === selectedId ? '-sel' : ''}`}
+              key={m.id}
               member={m}
               mapHeading={mapHeading}
               selected={m.id === selectedId}
