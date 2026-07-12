@@ -33,7 +33,19 @@ const CLOSED = DOCK_H - DOCK_PEEK;
  * shows a one-line live ticker (latest event); drag or tap to expand. When
  * everyone arrives it leads with a session recap.
  */
-export function ActivityDock({ sim, sessionName, destinationName }: { sim: Simulation; sessionName: string; destinationName: string }) {
+export function ActivityDock({
+  sim,
+  sessionName,
+  destinationName,
+  onOpenChange,
+}: {
+  sim: Simulation;
+  sessionName: string;
+  destinationName: string;
+  /** fires when the dock crosses open/closed — the session slides the
+      member surface aside while the dock is up */
+  onOpenChange?: (open: boolean) => void;
+}) {
   const y = useRef(new Animated.Value(CLOSED)).current;
   const yNow = useRef(CLOSED);
   const dragFrom = useRef(CLOSED);
@@ -46,6 +58,11 @@ export function ActivityDock({ sim, sessionName, destinationName }: { sim: Simul
     });
     return () => y.removeListener(id);
   }, [y]);
+
+  useEffect(() => {
+    onOpenChange?.(open);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const snapTo = (target: number) => {
     // JS driver on purpose: the pan gesture writes this value via setValue
