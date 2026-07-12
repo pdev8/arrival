@@ -11,6 +11,9 @@ interface Props {
   /** current map camera rotation (deg) so arrows stay true when the map is rotated */
   mapHeading?: number;
   selected: boolean;
+  /** changes every few seconds — breaks memoization so every marker gets a
+      periodic prop nudge, repainting views the native side silently lost */
+  repaintTick?: number;
   onPress: () => void;
 }
 
@@ -31,6 +34,7 @@ export const MemberMarker = React.memo(
   MemberMarkerInner,
   (prev, next) =>
     prev.selected === next.selected &&
+    prev.repaintTick === next.repaintTick &&
     Math.round(prev.mapHeading ?? 0) === Math.round(next.mapHeading ?? 0) &&
     prev.member.id === next.member.id &&
     prev.member.name === next.member.name &&
@@ -44,7 +48,7 @@ export const MemberMarker = React.memo(
     Math.round(prev.member.etaMin * 60) === Math.round(next.member.etaMin * 60)
 );
 
-function MemberMarkerInner({ member, mapHeading = 0, selected, onPress }: Props) {
+function MemberMarkerInner({ member, mapHeading = 0, selected, repaintTick: _repaintTick, onPress }: Props) {
   const moving = member.state === 'walking' || member.state === 'driving';
   const rot = moving ? member.heading - mapHeading + 45 : 0;
 

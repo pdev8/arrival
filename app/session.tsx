@@ -124,10 +124,18 @@ export default function SessionScreen() {
   // marker props → #5911 drops); the selected member is carved out of the
   // facepiles at render time instead
   const clusters = useClusters(sim.members, region);
+  // LIVE sessions skip clustering entirely: with 2-5 real people, facepiles
+  // aren't worth the marker lifecycle churn — every mount/visibility change
+  // is a chance for Apple Maps + New Arch to lose the view (#5911). Live
+  // pucks mount once at roster load and never unmount or hide.
   const { hiddenIds, piles } = useMemo(
-    () => clusterVisibility(clusters, selectedId),
-    [clusters, selectedId]
+    () => (isLive ? { hiddenIds: new Set<string>(), piles: [] } : clusterVisibility(clusters, selectedId)),
+    [clusters, selectedId, isLive]
   );
+
+  // watchdog: bump every 5s so each marker's memo yields a re-render — a
+  // guaranteed prop nudge that repaints any view the native side lost
+  const repaintTick = Math.floor(Date.now() / 5000);
 
   const remaining = Math.max(0, endsAt.current - Date.now());
   const remH = Math.floor(remaining / 3_600_000);
@@ -223,6 +231,7 @@ export default function SessionScreen() {
               member={m}
               mapHeading={mapHeading}
               selected={m.id === selectedId}
+              repaintTick={repaintTick}
               onPress={() => select(m.id)}
             />
           ))}
