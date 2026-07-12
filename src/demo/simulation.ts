@@ -57,6 +57,8 @@ export interface SimMember {
   levelLabel?: string;
   /** distance covered this session, meters */
   traveledM: number;
+  /** left the session — frozen at last-known position, excluded from convergence */
+  left?: boolean;
   /** the path traveled this session, for breadcrumb trails */
   trail: LatLng[];
   statusNote?: string;

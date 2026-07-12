@@ -107,6 +107,8 @@ export function eventText(type: string, name: string, payload: Record<string, un
       return 'Session started';
     case 'member_joined':
       return `${name} joined the session`;
+    case 'member_left':
+      return `${name} left — last position stays on the map`;
     case 'session_completed':
       return 'Session ended';
     case 'stop_posted':

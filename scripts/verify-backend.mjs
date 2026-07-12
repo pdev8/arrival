@@ -127,7 +127,18 @@ const r2 = await alice.rpc('toggle_reaction', { p_event_id: evId, p_emoji: '🎉
 check('reaction toggles on then off', !r1.error && !r2.error &&
   JSON.stringify(r1.data)?.includes(aliceId) && !JSON.stringify(r2.data)?.includes(aliceId));
 
-// 10. RLS: non-member can't post a stop into the trip
+// 10. leaving marks the row — the member and their last position survive
+const left = await bob.from('trip_members')
+  .update({ left_at: new Date().toISOString(), sharing_enabled: false })
+  .eq('trip_id', trip.id).eq('user_id', bobId).select();
+check('leave marks left_at (row survives)', !left.error && left.data?.length === 1 && !!left.data[0].left_at);
+const afterLeave = await alice.from('trip_members').select('user_id,last_lat').eq('trip_id', trip.id);
+check('departed member still on the roster with last position',
+  afterLeave.data?.length === 2 && afterLeave.data.some((m) => m.user_id === bobId && m.last_lat != null));
+const leftEvents = await alice.from('trip_events').select('type').eq('trip_id', trip.id);
+check('member_left feed event (trigger)', (leftEvents.data ?? []).some((e) => e.type === 'member_left'));
+
+// 11. RLS: non-member can't post a stop into the trip
 const malloryId = (await mallory.auth.getUser()).data.user.id;
 const intrude = await mallory.from('stops').insert({
   trip_id: trip.id, created_by: malloryId, kind: 'suggestion', status: 'proposed',

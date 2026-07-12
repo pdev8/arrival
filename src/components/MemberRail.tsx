@@ -59,10 +59,12 @@ const RailChip = React.memo(
             {m.name}
           </Text>
           <View style={styles.etaRow}>
-            <Text style={[styles.eta, { color: arrived ? UI.success : m.color }]}>
-              {arrived ? 'here' : formatEtaClock(m.etaMin)}
+            <Text style={[styles.eta, m.left ? { color: UI.textDim } : { color: arrived ? UI.success : m.color }]}>
+              {m.left ? 'left' : arrived ? 'here' : formatEtaClock(m.etaMin)}
             </Text>
-            {m.state === 'stopped' && <MaterialCommunityIcons name="pause" size={10} color={m.color} />}
+            {!m.left && m.state === 'stopped' && (
+              <MaterialCommunityIcons name="pause" size={10} color={m.color} />
+            )}
           </View>
         </Glass>
       </Pressable>

@@ -18,6 +18,7 @@ import { useClusters } from '../src/hooks/useClusters';
 import { SCENARIOS } from '../src/demo/data';
 import { SimMember, useSimulation } from '../src/demo/simulation';
 import { useLiveTrip } from '../src/live/useLiveTrip';
+import { leaveLiveTrip } from '../src/lib/live-session';
 import { supabaseConfigured } from '../src/lib/supabase';
 import { saveArchive } from '../src/lib/archive';
 import { surfaceError } from '../src/lib/errors';
@@ -140,7 +141,9 @@ export default function SessionScreen() {
   const selected = sim.members.find((m) => m.id === selectedId);
 
   const headerSub =
-    (sim.members.length === 0 ? 'Waiting for members…' : summarizeConvergence(sim.members)) +
+    (sim.members.filter((m) => !m.left).length === 0
+      ? 'Waiting for members…'
+      : summarizeConvergence(sim.members.filter((m) => !m.left))) +
     (you && you.mode === 'foot' && you.steps > 0 ? ` · ${you.steps.toLocaleString()} steps` : '') +
     ` · ends ${remH > 0 ? `${remH}h ` : ''}${remM}m`;
 
@@ -216,7 +219,11 @@ export default function SessionScreen() {
             photos never remount (remounts were the avatar flash on zoom) */}
         {sim.members.map((m) => (
           <MemberMarker
-            key={m.id}
+            // '-sel' in the key: selection transitions REMOUNT the affected
+            // markers — a self-heal for Apple Maps + New Arch natively
+            // dropping marker views on rapid prop flips (rn-maps #5911),
+            // which Expo Go can't run our old-arch mitigation against
+            key={`${m.id}${m.id === selectedId ? '-sel' : ''}`}
             member={m}
             mapHeading={mapHeading}
             selected={m.id === selectedId}
@@ -251,7 +258,10 @@ export default function SessionScreen() {
         title={sessionName}
         sub={headerSub}
         highlightSub={sim.allArrived}
-        onBack={() => router.replace('/')}
+        onBack={() => {
+          if (isLive && params.tripId) leaveLiveTrip(params.tripId).catch(() => {});
+          router.replace('/');
+        }}
         onInvite={() => setInviteOpen(true)}
       />
 
