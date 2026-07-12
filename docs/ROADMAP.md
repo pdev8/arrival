@@ -1,207 +1,132 @@
-# Arrival roadmap
+# Arrival — Launch Roadmap
 
-The slice ladder the PRs are cut from. **This file is the source of truth** — put
-new slices here, and reference the slice ID in the PR title/body.
+**Source of truth: the live roadmap artifact** (see `reference-roadmap-artifact`
+in project memory / ask Claude to reopen it). This file is its committed mirror —
+regenerate it from the artifact when statuses change; don't hand-edit both.
 
-> ## Why this file exists
->
-> The original roadmap was never committed. Every PR cites it — "Roadmap **B1**",
-> "Roadmap item `feat/nav-deeplinks` (size S)", "the roadmap's App Store epic",
-> "Closes roadmap `store/review-notes`" — but it lived outside the repo and is not
-> recoverable from git, any branch, the reflog, or unreachable objects.
->
-> This is reconstructed from the fossil record: 21 PR bodies, the branch names
-> (which are the roadmap's own slugs), `SPEC.md`, and `docs/PROJECT_STATE.md`.
-> Slice IDs and sizes are **quoted from the PRs where they exist**; anything
-> inferred is marked `(inferred)`. Don't let it drift out of the repo again.
+Tasks are numbered by epic prefix (D1, V3, B4…) and ordered **low → high
+priority: the bottom of this file ships first.** Every task is scoped as one PR.
 
-## The gate
+> **The gate:** do not submit to the App Store before the live backend ships —
+> a simulation-only build is a guideline 4.2 (minimal functionality) rejection.
+> See `docs/REVIEW_NOTES.md`.
 
-**Do not submit to the App Store before the live backend ships.** A
-simulation-only build reads as *minimal functionality* and is rejected under
-guideline **4.2** (see `docs/REVIEW_NOTES.md`). This makes **B6** the critical
-path for both the product and the store — not any piece of store paperwork.
+## D — Delight & depth (P3)
 
----
+The layer that makes Arrival feel loved rather than shipped. None of it blocks launch; all of it builds retention. Pick these up between heavier PRs.
 
-## Epic B — Live backend
+| # | Slice | What | Size | Status |
+|---|---|---|---|---|
+| **D1** | `feat/footprints-v2` | Pre-rendered shoe-print PNGs (per member color, both feet) as Marker image props — no live glyph views. *⏸ Blocked on YOUR device soak test (roadmap T2) — old-arch dev build must prove stable first* | M | Blocked |
+| **D2** | `feat/recap-share-card` | Branded card (mark, session, earned stats, crew facepile) captured via view-shot; share from live recap or any archived session. *✦ Shipped — PR #12 merged (iOS shares the PNG; Android text fallback until expo-sharing)* | M | **Shipped** (PR #12) |
+| **D3** | `feat/feed-reactions` | Long-press a timeline row to react (👍❤️😂🎉); chips stack on the row, first arriver auto-celebrates later arrivals. *✦ Shipped — PR #13 merged (demo-local; Realtime replication rides the B-epic backend)* | M | **Shipped** (PR #13) |
+| **D4** | `feat/live-activity` | Glanceable convoy status (ETAs, active stop) while the user navigates in another app. Config-plugin + widget extension. *⏸ Needs a dev-client/Xcode session — native widget extension can't ship from CI alone (eas.json is ready)* | L | Blocked |
+| **D5** | `feat/leader-mode` | Owner pins an ordered set of waypoints pre-trip; members see the shared itinerary and "follow the leader" camera. | L | Open |
 
-Demo → real multi-device sessions.
+## V — Vertical Truth — own the z-axis (P2)
 
-| Slice | What | Status | PR |
-|---|---|---|---|
-| **B1** | Supabase schema layer: migrations, RLS, RPCs, client scaffold | Shipped | #16 |
-| **B2** | Live session create/join, wired to the RPCs behind the config gate | Shipped | #17 |
-| **B3** | **Universal & deferred invite links** | **Skipped** | — |
-| **B4** | Realtime positions: private `trip:{id}` channel, 3 s publish, 30 s snapshot | Shipped | #19 |
-| **B5** | Background & adaptive tracking (SPEC §5.4 lifecycle) | Open | — |
-| **B6** | Live stops, votes & reactions | **Next** | — |
+Every competitor’s map is 2D and lies indoors, underground, and on mountains. No mainstream tracker answers "which floor?" — this is Arrival’s wedge. The demo badge UI shipped in PR #3; these wire the real sensors.
 
-**B3 was silently skipped.** PR #17 says *"Android's enter-code UI arrives with
-B3's universal links."* It never landed, so join-by-code is still an iOS-only
-prompt and **Android cannot join a session at all**. This hole is invisible in
-the code — nothing is broken, the UI simply doesn't exist.
+| # | Slice | What | Size | Status |
+|---|---|---|---|---|
+| **V1** | `feat/mall-scenario` | Hudson Yards food-court convergence from four floors, live level chips, scenario-integrity tests. *✦ Shipped — PR #7 merged* | M | **Shipped** (PR #7) |
+| **V2** | `feat/baro-floor-engine` | Pressure on every position packet (CMAltimeter / TYPE_PRESSURE); cross-device bias calibration when members are co-located; per-member floor delta. Ships first — powers everything below. | M | Open |
+| **V3** | `feat/floor-badge-live` | CLLocation.floor in venue-mapped buildings with floor-delta fallback; confidence-gated; desaturate pucks not on your floor. *✦ Demo badge UI merged (PR #3) + mall demo merged (PR #7); this task wires the real sensors — needs feat/baro-floor-engine* | S | In progress |
+| **V4** | `feat/underground-state` | Fused detector (GPS accuracy collapse + baro descent + transit/parking POI proximity) pins the puck at last good fix: "entered P2 Garage, 3:41". Resurface event on fix recovery. | M | Open |
+| **V5** | `feat/altitude-gated-arrivals` | Arrival confirmation requires horizontal geofence AND vertical agreement — kills the overpass / parking-deck false "arrived". | S | Open |
+| **V6** | `feat/parked-car-pin` | Auto-drop a pin on the driving→walking activity transition; level from baro delta since garage entry; new parked_car stop kind with nav deep-link. | M | Open |
+| **V7** | `feat/hike-mode` | Fused GPS+baro altitude per trail vertex: gain/loss stats, climb/descend badges, Tobler-adjusted ETAs, recap elevation profile, "400 ft above you" on member cards. | M | Open |
 
-**Do not infer B5/B6 order from the numbers.** PR #19 explicitly chose B6 next.
+## G — Guardian Loop — kids & care (P2)
 
-### B6 — the next slice
+Converts a group toy into something a parent relies on. Detection runs on the kid’s device via OS primitives (geofences, activity recognition), not on a parent staring at a dot.
 
-Live mode currently returns empty stops and surfaces *"Live stops & votes arrive
-with the next backend PR."* The tables (`stops`, `stop_participants`,
-`stop_votes`, `trip_events.reactions`) already exist.
+| # | Slice | What | Size | Status |
+|---|---|---|---|---|
+| **G1** | `feat/battery-telemetry` | Battery % on position packets and rail chips; pushes at 20/10%; at 5% a durable last-known snapshot (position, floor, heading, activity). Dark pucks carry reason codes: died / underground / unshared / no signal. | S | Open |
+| **G2** | `feat/watch-zones` | Parent-drawn zone syncs to the kid’s device; OS geofencing (CLCircularRegion / GeofencingClient) fires exit/enter while backgrounded; push to parent, local notice to kid. | S | Open |
+| **G3** | `feat/smart-checkin` | Parent ping → time-sensitive push with lock-screen "I’m OK" action; auto-trigger on odd dwell (stopped >N min at a non-place); 2-min no-ack escalates to max-rate sampling + status panel. | M | Open |
+| **G4** | `feat/unexpected-ride-alert` | Activity recognition detects a kid member entering a vehicle with no adult member co-moving within 30 m → high-priority push with the transition point pinned. Adult/kid roles on membership; expected-ride windows to mute it. *Only possible because sessions are group-scoped — single-user trackers can’t do this* | M | Open |
+| **G5** | `feat/kid-sos` | Long-press-armed SOS + lock-screen widget: max sampling, DND-bypassing push to all adults, parent auto-follow mode, reassurance screen on the kid’s device; persists until a parent clears it. | S | Open |
+| **G6** | `feat/pickup-choreography` | Promote any stop to a pickup point: kid-side geofence entry/exit events, "leave now" nudge timed to the kid’s walking ETA vs parent driving ETA, auto "reunited" on mutual geofence entry. | S | Open |
+| **G7** | `feat/security-handoff-card` | Lost-kid moment: one-tap shareable image — photo, "wearing" note, last position + floor + heading + battery/underground context — via the OS share sheet; auto-arms SOS follow mode. | M | Open |
 
-1. Define and test pure row-to-domain, vote, participant and reaction helpers.
-2. Load and subscribe to stops, participants, votes and relevant events for the
-   active trip, under the existing RLS.
-3. Implement live announce/suggest/join/vote/react mutations without changing
-   demo behavior.
-4. Extend `scripts/verify-backend.mjs` with two-member stop/vote/reaction round trips.
-5. Validate typecheck, lint, unit tests, schema CI, and a real two-device flow.
+## C — Richer coordination (P2)
 
-Keep the `Simulation` adapter boundary intact and preserve the Supabase-off demo
-fallback. Do **not** fold background tracking, universal links or Places search
-into this change unless the scope is explicitly revised.
+The features that make the map useful beyond watching dots move — finding places, getting told when things happen, and trusting ETAs.
 
----
+| # | Slice | What | Size | Status |
+|---|---|---|---|---|
+| **C1** | `feat/session-archive` | Auto-archive on completion; Home list; read-only decluttered map with all traces; NYC walk pre-seeded. *✦ Shipped — PR #8 merged* | M | **Shipped** (PR #8) |
+| **C2** | `feat/place-search` | Google Places autocomplete behind a Supabase edge proxy (key never ships in the app); POI tap → place sheet. *Needs supabase-setup (P1)* | M | Open |
+| **C3** | `feat/nav-deeplinks` | lib/nav-deeplinks.ts URL builders; Navigate action on destination, stops, and suggestions. *✦ Shipped — PR #2 merged (Navigate pill on stop cards + tappable destination)* | S | **Shipped** (PR #2) |
+| **C4** | `feat/push-notifications` | expo-notifications + Expo Push: stop posted, suggestion confirmed, member arrived, session ending in 15 min. *Needs realtime backend (P1)* | M | Open |
+| **C5** | `feat/arrival-geofences` | expo-location geofences on destination + confirmed stops; entering posts the feed event and flips member state. | M | Open |
+| **C6** | `feat/eta-service` | Edge cron recomputes each moving member’s ETA every ~2 min with traffic; straight-line fallback offline. *Needs supabase-setup (P1)* | M | Open |
+| **C7** | `feat/stale-members` | "Last seen 4m ago" badge past freshness thresholds; never silently drop a member from the map. | S | Open |
 
-## Epic A — Accounts
+## A — Accounts & identity (P2)
 
-Named in PR #19: *"live members are photo-less until real profiles (A epic)."*
+Real people need real identities before strangers share their location: sign-in, profiles, and the trust furniture around them.
 
-| Slice | What | Status |
-|---|---|---|
-| **A1** | Real auth & profiles (inferred) | Open |
+| # | Slice | What | Size | Status |
+|---|---|---|---|---|
+| **A1** | `feat/auth` | Supabase Auth; Apple sign-in is an App Store requirement when offering third-party login. *Needs supabase-setup (P1)* | M | Open |
+| **A2** | `feat/profiles` | Display name, photo upload to Supabase Storage with resize; avatar falls back to color initial. | M | Open |
+| **A3** | `feat/session-history` | Past sessions on the home screen (name, date, members, your steps) reading from Postgres. | S | Open |
+| **A4** | `feat/account-deletion` | Settings → delete account: removes auth user, memberships, profile media. Apple requires this for any app with accounts. | S | Open |
 
-Anonymous sign-in only today. This blocks real avatars, Sign in with Apple, and
-in-app account deletion — the last two are **store requirements**, not features.
+## H — Honest Map — trust when GPS fails (P1)
 
----
+A live map people rely on in exactly the moments GPS quits: honest uncertainty during dropouts, and phone-to-phone convergence for the last hundred feet.
 
-## Epic D — Demo & delight
+| # | Slice | What | Size | Status |
+|---|---|---|---|---|
+| **H1** | `feat/backfill-staleness` | Ring buffer of samples during connectivity outages; batch upsert + trail splice on reconnect. Puck grows an uncertainty ring with age × last speed instead of sitting confidently wrong. *Prerequisite for underground/mountain trust; pairs with feat/underground-state* | S | Open |
+| **H2** | `feat/last-100ft-finder` | Mutual "Find mode": session-scoped BLE advertise/scan → RSSI hot/cold proximity meter with baro floor hint; UWB tier (NISession / androidx.core.uwb) gives a distance + bearing arrow on capable phones. | L | Open |
 
-The solo-reviewable path. A reviewer must be able to exercise every feature on
-one device in ~4 minutes, with no account and no location permission.
+## B — Live backend (M1) — sim becomes real (P1)
 
-| Slice | What | Status | PR |
-|---|---|---|---|
-| **D2** | Shareable arrival recap card | Shipped | #12 |
-| **D3** | Reactions on the activity timeline | Shipped | #13 |
-| **F15** | Session archive + per-member retrace, locked viewport | Shipped | #8, #21 |
+The core promise: two phones see each other move. Everything in this epic replaces the simulation with Supabase while keeping the UI you already have.
 
----
+| # | Slice | What | Size | Status |
+|---|---|---|---|---|
+| **B1** | `infra/supabase-setup` | SPEC §5.2 schema + RLS + join/create RPCs; CI applies migrations to real Postgres and smokes the RPCs on every PR. *✦ Shipped — PR #16 merged. YOUR turn: run the migration in the dashboard SQL editor, enable anonymous sign-ins, paste the project URL (docs/BACKEND.md)* | M | **Shipped** (PR #16) |
+| **B2** | `feat/session-crud` | Create mints a server-side join code via create_trip; Home joins by code via join_trip; demo fallback behind the config gate; verify-backend script proves the whole flow + RLS. *✦ Shipped — PR #17 merged. Gate: your 2 dashboard clicks (migration SQL + anonymous sign-ins), then run node scripts/verify-backend.mjs* | M | **Shipped** (PR #17) |
+| **B3** | `feat/invite-links` | Join codes, arrival.app universal links, join/[code] preview screen, 12-member cap, owner lock + regenerate (F1a). *feat/session-crud* | L | Open |
+| **B4** | `feat/realtime-positions` | Private trip:{id} broadcast channel (RLS-authorized), GPS publish @3s + 30s snapshots, roster/feed via postgres_changes, live trails/ETAs/steps; verify-backend proves a 2-user realtime round-trip (10/10). *✦ Shipped — PR #19 merged. YOUR acceptance test: two phones, one link, walk around* | L | **Shipped** (PR #19) |
+| **B5** | `feat/background-tracking` | expo-task-manager background updates; speed-adaptive sampling and the stationary low-power downshift (§5.4). *feat/realtime-positions, needs dev client* | L | Open |
+| **B6** | `feat/stops-live` | Replace sim stop/vote/join mutations with Postgres writes + postgres_changes subscriptions. *infra/supabase-setup* | M | Open |
 
-## Epic S — Stability
+## S — App Store readiness (P0)
 
-| Slice | What | Status | PR |
-|---|---|---|---|
-| — | Error boundary + global error toast | Shipped | #5, #18 |
-| — | `infra/crash-telemetry` — Sentry (`componentDidCatch` is the marked hook point) | Open | — |
-| — | Maestro E2E lane (deferred in #9: "needs a simulator lane") | Open | — |
+Location apps get extra review scrutiny. This epic is everything Apple and Google will actually check — none of it is optional, and half of it has lead time. Start the review-sensitive items early.
 
----
+| # | Slice | What | Size | Status |
+|---|---|---|---|---|
+| **S1** | `infra/eas-builds` | Build profiles (dev/preview/prod), dev client with newArchEnabled:false, TestFlight internal + Play internal testing tracks. *✦ eas.json profiles merged (PR #11); credentials + first builds need your Apple/Google accounts* | M | In progress |
+| **S2** | `feat/permissions-disclosure` | Pre-permission explainer screen (why background location, session-scoped), NSLocation* strings, Play prominent-disclosure flow + declaration video (§7). | M | Open |
+| **S3** | `legal/privacy` | Hosted privacy policy, App Privacy questionnaire (precise location, identifiers), Play Data Safety form; document last-known-only position retention. *✦ Draft policy merged (PR #11, docs/PRIVACY.md — needs legal review + hosting); labels/forms remain* | M | In progress |
+| **S4** | `store/assets` | Screenshots (6.7" + 6.1" + iPad if supportsTablet stays true), preview video of the live map, descriptions, keywords. | M | Open |
+| **S5** | `store/review-notes` | Reviewer-facing notes explaining session-scoped tracking, solo demo path, rejection playbook — docs/REVIEW_NOTES.md. *✦ Shipped — PR #11 merged* | S | **Shipped** (PR #11) |
+| **S6** | `infra/crash-telemetry` | Sentry (expo plugin) with source maps via EAS; release health dashboard before public TestFlight. | S | Open |
 
-## Epic: App Store
+## T — Stability & correctness — ships first (P0)
 
-Ordered by lead time. Full detail in `docs/STORE_CHECKLIST.md`; reviewer-facing
-language in `docs/REVIEW_NOTES.md`; the data story in `docs/PRIVACY.md`.
+You said it yourself: it needs to work flawlessly. This epic locks in the marker-stability work, puts tests around the map, and makes regressions impossible to miss. Highest priority on the page.
 
-### Blocked on product
-
-- [ ] **B6** — live stops/votes (the 4.2 gate)
-- [ ] **B3** — universal links (Android can't join today)
-- [ ] **A1** — real auth & profiles
-- [ ] **B5** — background tracking (it *is* the core use case)
-- [ ] Live arrival order + server-side archives
-- [ ] Stale-member UI & channel lifecycle on expiry
-- [ ] Leave / stop-sharing controls
-
-### iOS (★ = long lead time)
-
-- [ ] ★ Location purpose strings naming the exact behavior
-- [ ] ★ `UIBackgroundModes: location`, verified on a dev build (not Expo Go)
-- [ ] ★ In-app disclosure screen shown **before** any OS prompt
-- [ ] ★ App Privacy questionnaire, matching `docs/PRIVACY.md`
-- [ ] Sign in with Apple · in-app account deletion
-- [ ] Screenshots, ≤30 s preview video, Notes for Review
-- [ ] TestFlight internal → external
-
-### Play (★ = long lead time)
-
-- [ ] ★ `ACCESS_BACKGROUND_LOCATION` declaration + demo video of the disclosure flow
-- [ ] ★ Prominent disclosure dialog (Play's policy wording)
-- [ ] Foreground service with a visible notification during sessions
-- [ ] Data Safety form
-- [ ] Store listing assets
-
-### Legal & infra
-
-- [x] `eas.json` profiles — development / preview / production
-- [ ] ★ Privacy policy out of draft → legal review → hosted URL
-- [ ] ★ Stand up `privacy@arrival.app` — **it does not exist yet**, and it blocks
-      the privacy policy, which blocks the App Privacy answers
-- [ ] EAS credentials + first TestFlight/Play-internal builds
-- [ ] Sentry with symbolication, before external beta
-- [ ] EAS Update channel per profile
+| # | Slice | What | Size | Status |
+|---|---|---|---|---|
+| **T1** | `test/unit-foundation` | jest-expo; logic extracted to lib/ modules (format, trail, clusters, convergence, lights, archive); 84 tests. *✦ Shipped — PR #6 merged (convention: every logic PR ships tests)* | M | **Shipped** (PR #6) |
+| **T2** | `fix/marker-stability-validation` | Dev build (old arch) soak test: 15 min of trails-on zoom churn across both scenarios; document results; decide if PROVIDER_GOOGLE fallback flag is needed. *Watch react-native-maps #5911 / PR #5938 for the real fix* | S | Open |
+| **T3** | `perf/render-pass` | Markers/rail chips/ring dots/feed rows/stop cards memoized on exactly what they draw; tick 250ms → 1s once everyone arrives. *✦ Shipped — PR #10 merged (on-device FPS profiling still worth a pass with your soak test)* | M | **Shipped** (PR #10) |
+| **T4** | `test/e2e-smoke` | Flows: create session → trails toggle → select member → retrace → recap; runs on simulator in CI. | M | Open |
+| **T5** | `infra/ci` | GitHub Actions: tsc --noEmit, eslint (flat config), jest — one job on every PR and main push. *✦ Shipped — PRs #4 + #9 merged (E2E lane lives in test/e2e-smoke)* | S | **Shipped** (PRs #4 + #9) |
+| **T6** | `fix/error-boundaries` | Screen-level boundaries with recovery UI; defined empty/loading states for every surface before real network data arrives. *✦ Root boundary + recovery screen merged (PR #5); designed empty states remain* | S | In progress |
 
 ---
 
-## F16 — Family mode: finding a kid, safely
+## Acceptance criteria
 
-Arrival already has every primitive this needs: the **mall scenario**, **vertical
-awareness** (which floor someone is on), **clustering**, **arrival detection**,
-and **retrace**. "Where is my kid?" at a mall, theme park, festival or airport is
-this product pointed at the highest-stakes version of its own use case — and the
-floor signal is the part no mall map can give you.
-
-**What it is**
-
-- **Outing sessions, not a tracker.** A guardian starts a session for the venue;
-  it expires like any other session.
-- **Find mode**: bearing + distance + floor — *"Maya · 40 m NE · Level 2"*.
-- **Reunite**: retrace pointed forward — a live path *to* them, not just a dot.
-- **Stay-in-zone**: a geofence around the venue; a nudge if a child leaves it.
-- **Help button** on the child's device — pings every guardian with position and floor.
-- **Last-seen** that survives a dead battery or lost signal.
-
-**What keeps it safe**
-
-- **Session-scoped, never ambient** — the same hard expiry as every other session.
-- **The child sees who can see them**, always, on their own screen. No invisible watcher.
-- **Guardian pairing is explicit** and device-to-device — not a link anyone can forward.
-- **Data minimization**: last-known only, no server-side movement history.
-- **Age gate + verifiable parental consent** — COPPA / GDPR-K are not optional here.
-
-> ### Read this before building it
->
-> Arrival's entire privacy thesis — the one that answers the 2.5.4 rejection — is
-> *"a coordination layer, not a persistent people-tracker."* A child-finding
-> feature strains that sentence harder than anything else we could build, and it
-> changes the store posture materially: family/child data pulls in COPPA, GDPR-K,
-> and a much harsher App Privacy review.
->
-> It is worth doing. It is **not** worth doing as an always-on tracker bolted onto
-> the side. Ship it as *outing mode* — bounded, consensual, visible to the child —
-> or the thesis breaks and the rejection playbook in `docs/REVIEW_NOTES.md` stops
-> working.
-
----
-
-## Worth building next
-
-Ranked by leverage per unit of work.
-
-| Feature | Size | Why |
-|---|---|---|
-| **Live Activity / Dynamic Island** | M | Convoy status while the user is in Google Maps/Waze. Already a SPEC v1.1 candidate — and it *is* the answer to a 2.5.4 rejection: visible, persistent benefit. |
-| **Reunite navigation** | S | Retrace, inverted: a live path *to* a member. The geometry already exists. Cheapest big win on the list. |
-| **Android enter-code UI** | S | The B3 fallout. Not a feature — a hole. Android literally cannot join a session. |
-| **Trip memories** | S | The archive holds every trace; add photos pinned where they were taken. The retrace screen is the best thing in the app and it's currently a dead end. |
-| **Real ETAs (Routes API)** | M | Straight-line ETA is the biggest lie the app tells. Every convergence claim in the UI depends on this number being true. Decisions D2/D5 still open. |
-| **Battery saver + stale handling** | M | M3 exit criteria. A wrong dot is worse than a grey one. |
-| **Leader mode** | M | Follow one car's route; ETAs measured against the leader, not the destination. SPEC v2 candidate. |
-| **Waypoint planning** | L | A shared itinerary agreed before the trip — stops become a plan, not interruptions. SPEC v1.1. |
-
----
-
-Sources: 21 PR bodies · branch names · `SPEC.md` · `docs/PROJECT_STATE.md` ·
-`docs/STORE_CHECKLIST.md` · `docs/REVIEW_NOTES.md` · git log through `f82bf25`.
+Each task's acceptance criteria live in the artifact (expand the task) and in
+the PR that shipped it; the PR is the record for shipped slices.
