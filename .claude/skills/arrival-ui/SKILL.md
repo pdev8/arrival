@@ -32,13 +32,18 @@ record; this is what you must not regress.
   protrudes past the point. Idle relaxes to a circle. "You" looks like everyone
   else (halo retired). Paused = ❚❚ glyph inside the timer text (tag chip +
   rail ETA) — never rings or badges on the puck.
-- Clustered members are conditionally RENDERED, never opacity-hidden. The old
-  opacity trick existed for remote photos (remount = flash); avatars are local
-  now, so remounts are invisible — and rn-maps #5911 (Apple Maps + New Arch)
-  drops marker views on prop flips, so the fewer prop changes a mounted
-  marker sees, the better. Keep the clustering INPUT stable across selection
-  and carve the selected member out at render time (`clusterVisibility` in
-  lib/clusters).
+- LIVE sessions have NO clustering: every real member's puck mounts once at
+  roster load and never unmounts, hides, or remounts. On Expo Go (New Arch,
+  can't opt out) Apple Maps loses custom marker views on ANY lifecycle event
+  — mount, visibility flip, or key-change remount (#5911), sometimes
+  permanently. Facepiles are demo-only, where members are simulated and
+  clustered members are conditionally RENDERED, never opacity-hidden, with
+  the clustering INPUT stable across selection (`clusterVisibility` in
+  lib/clusters). A `repaintTick` prop (5 s bucket) breaks each marker's memo
+  periodically so any natively-lost view gets a repainting prop nudge.
+  Never add a key-change remount as a "self-heal" — a freshly inserted
+  marker often doesn't paint until its next prop update (that was the
+  90%-reproducible blink-on-Close).
 - Demo avatars are bundled local assets (`assets/avatars/`); don't switch back
   to remote URLs in markers.
 

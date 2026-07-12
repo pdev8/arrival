@@ -124,10 +124,18 @@ export default function SessionScreen() {
   // marker props → #5911 drops); the selected member is carved out of the
   // facepiles at render time instead
   const clusters = useClusters(sim.members, region);
+  // LIVE sessions skip clustering entirely: with 2-5 real people, facepiles
+  // aren't worth the marker lifecycle churn — every mount/visibility change
+  // is a chance for Apple Maps + New Arch to lose the view (#5911). Live
+  // pucks mount once at roster load and never unmount or hide.
   const { hiddenIds, piles } = useMemo(
-    () => clusterVisibility(clusters, selectedId),
-    [clusters, selectedId]
+    () => (isLive ? { hiddenIds: new Set<string>(), piles: [] } : clusterVisibility(clusters, selectedId)),
+    [clusters, selectedId, isLive]
   );
+
+  // watchdog: bump every 5s so each marker's memo yields a re-render — a
+  // guaranteed prop nudge that repaints any view the native side lost
+  const repaintTick = Math.floor(Date.now() / 5000);
 
   const remaining = Math.max(0, endsAt.current - Date.now());
   const remH = Math.floor(remaining / 3_600_000);
@@ -210,17 +218,20 @@ export default function SessionScreen() {
         ))}
 
         {/* clustered members are NOT mounted (conditional render, no opacity
-            flips): avatars are local so remounts are flash-free, and a
-            freshly mounted view can't be a #5911-dropped one. '-sel' in the
-            key remounts markers across selection transitions as a self-heal. */}
+            flips — the #5911 drop trigger removed in PR #31). Keys are STABLE
+            across selection: the old '-sel' remount "self-heal" caused a
+            3-5s blank window on every deselect, because a freshly inserted
+            marker on New Arch often doesn't paint until its next prop update
+            (which arrives with the next 3s position packet). */}
         {sim.members
           .filter((m) => !hiddenIds.has(m.id))
           .map((m) => (
             <MemberMarker
-              key={`${m.id}${m.id === selectedId ? '-sel' : ''}`}
+              key={m.id}
               member={m}
               mapHeading={mapHeading}
               selected={m.id === selectedId}
+              repaintTick={repaintTick}
               onPress={() => select(m.id)}
             />
           ))}
