@@ -11,9 +11,6 @@ interface Props {
   /** current map camera rotation (deg) so arrows stay true when the map is rotated */
   mapHeading?: number;
   selected: boolean;
-  /** invisible but still mounted (riding in a cluster) — unmounting would
-      flash the photo on remount */
-  hidden?: boolean;
   onPress: () => void;
 }
 
@@ -34,7 +31,6 @@ export const MemberMarker = React.memo(
   MemberMarkerInner,
   (prev, next) =>
     prev.selected === next.selected &&
-    prev.hidden === next.hidden &&
     Math.round(prev.mapHeading ?? 0) === Math.round(next.mapHeading ?? 0) &&
     prev.member.id === next.member.id &&
     prev.member.name === next.member.name &&
@@ -48,7 +44,7 @@ export const MemberMarker = React.memo(
     Math.round(prev.member.etaMin * 60) === Math.round(next.member.etaMin * 60)
 );
 
-function MemberMarkerInner({ member, mapHeading = 0, selected, hidden = false, onPress }: Props) {
+function MemberMarkerInner({ member, mapHeading = 0, selected, onPress }: Props) {
   const moving = member.state === 'walking' || member.state === 'driving';
   const rot = moving ? member.heading - mapHeading + 45 : 0;
 
@@ -56,9 +52,7 @@ function MemberMarkerInner({ member, mapHeading = 0, selected, hidden = false, o
     <Marker
       coordinate={member.pos}
       anchor={{ x: 0.5, y: 0.4 }}
-      onPress={hidden ? undefined : onPress}
-      tappable={!hidden}
-      opacity={hidden ? 0 : 1}
+      onPress={onPress}
       tracksViewChanges
       zIndex={member.isYou ? 20 : 10}
     >

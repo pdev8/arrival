@@ -27,6 +27,30 @@ export function groupByProximity<T extends { pos: LatLng }>(
   return groups;
 }
 
+/**
+ * Which members hide behind facepiles, and the piles to draw. The selected
+ * member always renders individually (carved out at render time so the
+ * grouping itself stays stable across selection changes — regrouping on
+ * every tap churned marker props, which Apple Maps + New Arch answers by
+ * silently dropping marker views, rn-maps #5911). A pile needs ≥2 visible
+ * members; a pile reduced to one by the carve-out renders that member solo.
+ */
+export function clusterVisibility<T extends { id: string; pos: LatLng }>(
+  groups: ProximityGroup<T>[],
+  selectedId: string | null
+): { hiddenIds: Set<string>; piles: ProximityGroup<T>[] } {
+  const hiddenIds = new Set<string>();
+  const piles: ProximityGroup<T>[] = [];
+  for (const g of groups) {
+    const visible = g.members.filter((m) => m.id !== selectedId);
+    if (visible.length > 1) {
+      for (const m of visible) hiddenIds.add(m.id);
+      piles.push({ members: visible, center: centerOf(visible) });
+    }
+  }
+  return { hiddenIds, piles };
+}
+
 export function centerOf(items: { pos: LatLng }[]): LatLng {
   return {
     latitude: items.reduce((s, x) => s + x.pos.latitude, 0) / items.length,
