@@ -1,8 +1,10 @@
 import {
   LatLng,
   bearingDeg,
+  constrainMapRegion,
   cumulativeDistances,
   distanceM,
+  isZoomedInside,
   lerp,
   pointAlongRoute,
   routeSlice,
@@ -42,6 +44,72 @@ describe('lerp', () => {
     expect(lerp(A, NORTH_OF_A, 0)).toEqual(A);
     expect(lerp(A, NORTH_OF_A, 1)).toEqual(NORTH_OF_A);
     expect(lerp(A, NORTH_OF_A, 0.5).latitude).toBeCloseTo(40.735, 6);
+  });
+});
+
+describe('constrainMapRegion', () => {
+  const bounds = {
+    northEast: { latitude: 10, longitude: 20 },
+    southWest: { latitude: 0, longitude: 0 },
+  };
+
+  it('leaves an in-bounds close-up unchanged', () => {
+    const region = { latitude: 5, longitude: 10, latitudeDelta: 2, longitudeDelta: 4 };
+    expect(constrainMapRegion(region, bounds)).toEqual(region);
+  });
+
+  it('moves an out-of-bounds viewport to the nearest valid edge', () => {
+    const constrained = constrainMapRegion(
+      { latitude: 9.8, longitude: 0.2, latitudeDelta: 2, longitudeDelta: 4 },
+      bounds
+    );
+    expect(constrained.latitude).toBe(9);
+    expect(constrained.longitude).toBe(2);
+  });
+
+  it('centers a viewport that is larger than the boundary', () => {
+    const constrained = constrainMapRegion(
+      { latitude: 9, longitude: 19, latitudeDelta: 12, longitudeDelta: 24 },
+      bounds
+    );
+    expect(constrained.latitude).toBe(5);
+    expect(constrained.longitude).toBe(10);
+  });
+});
+
+describe('isZoomedInside', () => {
+  const bounds = {
+    northEast: { latitude: 10, longitude: 20 },
+    southWest: { latitude: 0, longitude: 0 },
+  };
+
+  it('is false at the default frame, so the map stays pinned', () => {
+    const atDefault = { latitude: 5, longitude: 10, latitudeDelta: 10, longitudeDelta: 20 };
+    expect(isZoomedInside(atDefault, bounds)).toBe(false);
+  });
+
+  it('is false for sub-percent camera jitter around the default frame', () => {
+    const jittered = { latitude: 5, longitude: 10, latitudeDelta: 9.95, longitudeDelta: 19.9 };
+    expect(isZoomedInside(jittered, bounds)).toBe(false);
+  });
+
+  it('is true once the viewport is genuinely tighter than the boundary', () => {
+    const zoomed = { latitude: 5, longitude: 10, latitudeDelta: 4, longitudeDelta: 8 };
+    expect(isZoomedInside(zoomed, bounds)).toBe(true);
+  });
+
+  it('requires both axes to be tighter, not just one', () => {
+    const onlyLatTighter = { latitude: 5, longitude: 10, latitudeDelta: 4, longitudeDelta: 20 };
+    expect(isZoomedInside(onlyLatTighter, bounds)).toBe(false);
+  });
+
+  it('is false for a degenerate boundary', () => {
+    const degenerate = {
+      northEast: { latitude: 5, longitude: 10 },
+      southWest: { latitude: 5, longitude: 10 },
+    };
+    const region = { latitude: 5, longitude: 10, latitudeDelta: 1, longitudeDelta: 1 };
+    expect(isZoomedInside(region, degenerate)).toBe(false);
   });
 });
 

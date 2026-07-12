@@ -3,6 +3,16 @@ export interface LatLng {
   longitude: number;
 }
 
+export interface MapRegion extends LatLng {
+  latitudeDelta: number;
+  longitudeDelta: number;
+}
+
+export interface MapBounds {
+  northEast: LatLng;
+  southWest: LatLng;
+}
+
 const R = 6371000; // earth radius, meters
 const toRad = (d: number) => (d * Math.PI) / 180;
 const toDeg = (r: number) => (r * 180) / Math.PI;
@@ -31,6 +41,40 @@ export function lerp(a: LatLng, b: LatLng, t: number): LatLng {
     latitude: a.latitude + (b.latitude - a.latitude) * t,
     longitude: a.longitude + (b.longitude - a.longitude) * t,
   };
+}
+
+/** Clamp the visible edges of a map region to a geographic boundary. */
+export function constrainMapRegion(region: MapRegion, bounds: MapBounds): MapRegion {
+  const halfLat = region.latitudeDelta / 2;
+  const halfLng = region.longitudeDelta / 2;
+  const minLatitude = bounds.southWest.latitude + halfLat;
+  const maxLatitude = bounds.northEast.latitude - halfLat;
+  const minLongitude = bounds.southWest.longitude + halfLng;
+  const maxLongitude = bounds.northEast.longitude - halfLng;
+
+  const latitude =
+    minLatitude <= maxLatitude
+      ? Math.max(minLatitude, Math.min(region.latitude, maxLatitude))
+      : (bounds.southWest.latitude + bounds.northEast.latitude) / 2;
+  const longitude =
+    minLongitude <= maxLongitude
+      ? Math.max(minLongitude, Math.min(region.longitude, maxLongitude))
+      : (bounds.southWest.longitude + bounds.northEast.longitude) / 2;
+
+  return { ...region, latitude, longitude };
+}
+
+/**
+ * True once the viewport is meaningfully tighter than its boundary — i.e. the
+ * user has zoomed past the default frame. Panning is a zoomed-in affordance
+ * only: at the default frame the map is pinned, so there is nothing to pan to.
+ * The tolerance absorbs the sub-percent jitter a settled camera reports.
+ */
+export function isZoomedInside(region: MapRegion, bounds: MapBounds, tolerance = 0.98): boolean {
+  const latSpan = bounds.northEast.latitude - bounds.southWest.latitude;
+  const lngSpan = bounds.northEast.longitude - bounds.southWest.longitude;
+  if (latSpan <= 0 || lngSpan <= 0) return false;
+  return region.latitudeDelta < latSpan * tolerance && region.longitudeDelta < lngSpan * tolerance;
 }
 
 /** Cumulative distance (meters) at each waypoint of a route. */
