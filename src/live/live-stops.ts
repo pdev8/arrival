@@ -107,6 +107,10 @@ export function eventText(type: string, name: string, payload: Record<string, un
       return 'Session started';
     case 'member_joined':
       return `${name} joined the session`;
+    case 'destination_set':
+      return `${name} set the destination: ${payload.name ?? 'a place'}`;
+    case 'destination_changed':
+      return `${name} changed the destination to ${payload.name ?? 'a place'}`;
     case 'member_left':
       return `${name} left — last position stays on the map`;
     case 'session_completed':

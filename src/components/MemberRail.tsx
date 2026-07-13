@@ -3,7 +3,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { formatEtaClock } from '../lib/format';
+import { memberHeadline } from '../lib/format';
 import { AvatarRing } from './AvatarRing';
 import { filledDots } from './DotRing';
 import { Glass } from './Glass';
@@ -67,7 +67,7 @@ const RailChip = React.memo(
           </Text>
           <View style={styles.etaRow}>
             <Text style={[styles.eta, m.left ? { color: UI.textDim } : { color: arrived ? UI.success : m.color }]}>
-              {m.left ? 'left' : arrived ? 'here' : formatEtaClock(m.etaMin)}
+              {memberHeadline(m)}
             </Text>
             {!m.left && m.state === 'stopped' && (
               <MaterialCommunityIcons name="pause" size={10} color={m.color} />
@@ -83,7 +83,8 @@ const RailChip = React.memo(
     prev.m.name === next.m.name &&
     prev.m.color === next.m.color &&
     prev.m.state === next.m.state &&
-    Math.round(prev.m.etaMin * 60) === Math.round(next.m.etaMin * 60) &&
+    Math.round((prev.m.etaMin ?? -1) * 60) === Math.round((next.m.etaMin ?? -1) * 60) &&
+    Math.round(prev.m.traveledM / 10) === Math.round(next.m.traveledM / 10) &&
     filledDots(prev.m.progress, 14) === filledDots(next.m.progress, 14)
 );
 

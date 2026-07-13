@@ -41,7 +41,7 @@ describe('rosterPile', () => {
 });
 
 describe('sortMembers', () => {
-  const m = (id: string, etaMin: number, left?: boolean) => ({ id, etaMin, left });
+  const m = (id: string, etaMin: number, left?: boolean) => ({ id, etaMin, left, traveledM: 0 });
   it('puts you first, fastest next, departed last', () => {
     const order = sortMembers(
       [m('a', 9), m('you', 20), m('b', 3, true), m('c', 5), m('d', 1)],
@@ -55,5 +55,18 @@ describe('sortMembers', () => {
   it('multiple departed keep eta order at the end', () => {
     const order = sortMembers([m('a', 5, true), m('b', 2, true), m('c', 3)], 'you').map((x) => x.id);
     expect(order).toEqual(['c', 'b', 'a']);
+  });
+});
+
+describe('sortMembers — free roam', () => {
+  const m = (id: string, traveledM: number, left?: boolean) => ({ id, etaMin: null, traveledM, left });
+
+  it('ranks by ground covered when there is no ETA', () => {
+    const order = sortMembers([m('a', 100), m('you', 50), m('b', 900), m('c', 400)], 'you').map((x) => x.id);
+    expect(order).toEqual(['you', 'b', 'c', 'a']);
+  });
+  it('still puts departed members last', () => {
+    const order = sortMembers([m('gone', 9999, true), m('here', 10)], 'you').map((x) => x.id);
+    expect(order).toEqual(['here', 'gone']);
   });
 });

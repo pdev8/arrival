@@ -4,7 +4,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { formatEtaCoarse, formatLevel } from '../lib/format';
+import { formatLevel, memberHeadline } from '../lib/format';
 
 interface Props {
   member: SimMember;
@@ -58,7 +58,8 @@ export const MemberMarker = React.memo(
     prev.member.left === next.member.left &&
     prev.member.level === next.member.level &&
     Math.round(prev.member.heading / 5) === Math.round(next.member.heading / 5) &&
-    Math.round(prev.member.etaMin) === Math.round(next.member.etaMin)
+    Math.round((prev.member.etaMin ?? -1)) === Math.round((next.member.etaMin ?? -1)) &&
+    Math.round(prev.member.traveledM / 50) === Math.round(next.member.traveledM / 50)
 );
 
 function MemberMarkerInner({ member, mapHeading = 0, selected, repaintTick: _repaintTick, onPress }: Props) {
@@ -82,6 +83,7 @@ function MemberMarkerInner({ member, mapHeading = 0, selected, repaintTick: _rep
         level={member.level}
         left={!!member.left}
         etaMin={member.etaMin}
+        traveledM={member.traveledM}
         rot={rot}
         moving={moving}
       />
@@ -96,7 +98,8 @@ interface PuckProps {
   state: SimMember['state'];
   level: number | null;
   left: boolean;
-  etaMin: number;
+  etaMin: number | null;
+  traveledM: number;
   rot: number;
   moving: boolean;
 }
@@ -107,8 +110,10 @@ interface PuckProps {
  * actually draws, so its native view tree is created once and left alone.
  */
 const Puck = React.memo(
-  function Puck({ name, color, avatar, state, level, left, etaMin, rot, moving }: PuckProps) {
-    const eta = left ? 'left' : state === 'arrived' ? 'here' : formatEtaCoarse(etaMin);
+  function Puck({ name, color, avatar, state, level, left, etaMin, traveledM, rot, moving }: PuckProps) {
+    // free roam (etaMin null) → distance covered; coarse so the view doesn't
+    // re-render every second (see the map contract)
+    const eta = memberHeadline({ etaMin, left, state, traveledM }, true);
     return (
       <View style={[styles.wrap, left && styles.leftDim]}>
         <View style={[styles.holder, { transform: [{ rotate: `${rot}deg` }] }]}>
@@ -153,7 +158,8 @@ const Puck = React.memo(
     p.left === n.left &&
     p.rot === n.rot &&
     p.moving === n.moving &&
-    Math.round(p.etaMin) === Math.round(n.etaMin)
+    Math.round(p.etaMin ?? -1) === Math.round(n.etaMin ?? -1) &&
+    Math.round(p.traveledM / 50) === Math.round(n.traveledM / 50)
 );
 
 const SIZE = 44;

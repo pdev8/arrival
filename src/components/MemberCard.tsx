@@ -3,7 +3,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { compassDir, formatDistance, formatEtaClock, formatLevel, statusLine } from '../lib/format';
+import { compassDir, formatDistance, formatLevel, headlineLabel, memberHeadline, statusLine } from '../lib/format';
 import { bearingDeg, distanceM } from '../lib/geo';
 import { STATE_ICON } from '../lib/icons';
 import { AvatarRing } from './AvatarRing';
@@ -73,9 +73,11 @@ function MemberCardInner({ member, you, onRetrace, onClose }: Props) {
         </View>
         <View style={styles.etaCol}>
           <Text style={[styles.eta, member.left ? { color: UI.textDim } : { color: arrived ? UI.success : member.color }]}>
-            {member.left ? '—' : arrived ? 'here' : formatEtaClock(member.etaMin)}
+            {member.left ? '—' : memberHeadline(member)}
           </Text>
-          {!arrived && !member.left && <Text style={styles.etaLabel}>eta</Text>}
+          {!member.left && !!headlineLabel(member) && (
+            <Text style={styles.etaLabel}>{headlineLabel(member)}</Text>
+          )}
         </View>
       </View>
       <View style={styles.actions}>
@@ -109,7 +111,8 @@ export const MemberCard = React.memo(
     prev.member.level === next.member.level &&
     prev.member.steps === next.member.steps &&
     Math.round(prev.member.remainingM) === Math.round(next.member.remainingM) &&
-    Math.round(prev.member.etaMin * 60) === Math.round(next.member.etaMin * 60) &&
+    Math.round((prev.member.etaMin ?? -1) * 60) === Math.round((next.member.etaMin ?? -1) * 60) &&
+    Math.round(prev.member.traveledM / 10) === Math.round(next.member.traveledM / 10) &&
     filledDots(prev.member.progress, 16) === filledDots(next.member.progress, 16) &&
     prev.member.pos === next.member.pos &&
     prev.you?.pos === next.you?.pos

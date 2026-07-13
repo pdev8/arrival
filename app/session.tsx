@@ -1,9 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutAnimation, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, LayoutAnimation, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import MapView from 'react-native-maps';
 import { ActivityDock, DOCK_PEEK } from '../src/components/ActivityDock';
 import { DestinationMarker } from '../src/components/DestinationMarker';
+import { DestinationSheet } from '../src/components/DestinationSheet';
+import { NameDestinationSheet } from '../src/components/NameDestinationSheet';
 import { InviteSheet } from '../src/components/InviteSheet';
 import { MapFabs } from '../src/components/MapFabs';
 import { MemberPager } from '../src/components/MemberPager';
@@ -42,7 +44,7 @@ const RECENTER_M = 8;
 
 export default function SessionScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ name?: string; kind?: string; durationMin?: string; code?: string; live?: string; tripId?: string }>();
+  const params = useLocalSearchParams<{ name?: string; kind?: string; durationMin?: string; code?: string; live?: string; tripId?: string; freeRoam?: string }>();
   const sessionName = params.name ?? 'Session';
   const joinCode = params.code ?? 'kfx-mqvp-dhz';
   const durationMin = Number(params.durationMin ?? 240);
@@ -51,8 +53,12 @@ export default function SessionScreen() {
 
   // live when created/joined against the backend; demo simulation otherwise
   const isLive = params.live === '1' && supabaseConfigured && !!params.tripId;
-  const demoSim = useSimulation(!isLive, scenario);
-  const liveSim = useLiveTrip(isLive, params.tripId, scenario.destination, 'Paul');
+  /** free roam: the session starts with nowhere to be, and the group can set a
+   *  destination later — from the header — because people change their minds */
+  const freeRoam = params.freeRoam === '1';
+  const initialDest = freeRoam ? null : scenario.destination;
+  const demoSim = useSimulation(!isLive, scenario, initialDest);
+  const liveSim = useLiveTrip(isLive, params.tripId, initialDest, 'Paul');
   const sim = isLive && liveSim ? liveSim : demoSim;
   const mapRef = useRef<MapView>(null);
   const { width: screenW } = useWindowDimensions();
@@ -71,16 +77,37 @@ export default function SessionScreen() {
   const [follow, setFollow] = useState(false);
   const [showTrails, setShowTrails] = useState(false);
   const [placePick, setPlacePick] = useState<LatLng | null>(null);
+  /** "tap the map to choose" mode, entered from the header */
+  const [pickingDest, setPickingDest] = useState(false);
+  const [destPick, setDestPick] = useState<LatLng | null>(null);
+  const [destSearchOpen, setDestSearchOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [mapHeading, setMapHeading] = useState(0);
+  /** the session bar's measured height — the map chips and the pick banner
+   *  park beneath it, and follow it when it grows (destination row) */
+  const [headerH, setHeaderH] = useState(96);
   const fitCounter = useRef(0);
   const endsAt = useRef(Date.now() + durationMin * 60_000);
 
   // Archive on completion: the session freezes to the profile with every
   // trace intact, viewable read-only from Home (F15).
+  /**
+   * A session is ARCHIVED when it is FINISHED — which is two things, and
+   * neither of them is "I left":
+   *
+   *   1. its time ran out, or
+   *   2. everyone has left it.
+   *
+   * Leaving on my own doesn't archive anything: the session keeps running for
+   * the others, and I can rejoin with the same code. Arriving doesn't archive
+   * it either — the group can hang around, keep moving, or pick a new
+   * destination (that's the whole point of being able to change it).
+   */
   const archivedRef = useRef(false);
+  const sessionOver = Date.now() >= endsAt.current;
+  const everyoneLeft = sim.members.length > 0 && sim.members.every((m) => m.left);
   useEffect(() => {
-    if (!sim.allArrived || archivedRef.current) return;
+    if (archivedRef.current || (!sessionOver && !everyoneLeft)) return;
     archivedRef.current = true;
     saveArchive({
       id: `session-${joinCode}`,
@@ -88,7 +115,10 @@ export default function SessionScreen() {
       kind: params.kind ?? 'walk',
       endedAt: Date.now(),
       durationSec: Math.round(sim.elapsedSec),
-      destination: scenario.destination,
+      destination: sim.destination ?? {
+        name: 'Free roam',
+        pos: sim.members[0]?.pos ?? scenario.destination.pos,
+      },
       members: sim.members.map((m) => ({
         id: m.id,
         name: m.name,
@@ -101,7 +131,8 @@ export default function SessionScreen() {
       })),
       arrivalOrder: sim.arrivalOrder,
     }).catch((e) => surfaceError('Saving session to archive', e));
-  }, [sim.allArrived]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionOver, everyoneLeft]);
 
   /**
    * Camera: follow the selected member, otherwise auto-fit the whole crew.
@@ -153,10 +184,9 @@ export default function SessionScreen() {
     followedRef.current = null;
     lastCenterRef.current = null;
     if (!selectedId && autoFit && fitCounter.current++ % 4 === 0) {
-      map.fitToCoordinates(
-        [...sim.members.map((m) => m.pos), scenario.destination.pos],
-        { edgePadding: FIT_PADDING, animated: true }
-      );
+      const pts = sim.members.map((m) => m.pos);
+      if (sim.destination) pts.push(sim.destination.pos);
+      if (pts.length) map.fitToCoordinates(pts, { edgePadding: FIT_PADDING, animated: true });
     }
   }, [sim.members, selectedId, autoFit, follow]);
 
@@ -239,7 +269,34 @@ export default function SessionScreen() {
   // while a bottom sheet is up, the session's own bottom panels (rail/card,
   // dock, fabs) would show through the dimmed backdrop as ghost panels
   // stacked above the sheet — hide them so the sheet rises over map only
-  const sheetOpen = inviteOpen || placePick !== null;
+  // while any sheet is up — or while you're choosing a destination on the map —
+  // the session's own panels get out of the way: the pick banner owns that strip
+  const sheetOpen = inviteOpen || placePick !== null || destSearchOpen || destPick !== null || pickingDest;
+
+  /**
+   * LEAVE — and only for me. Leaving is not ending: the session keeps running
+   * for everyone else, my last known position stays on their map (left_at
+   * marks the row, it never deletes it), and I can rejoin with the same code.
+   * So this does NOT archive: an archive is a session that FINISHED, not one I
+   * stepped out of. See the archive effect below for what actually ends it.
+   */
+  const leaveSession = () => {
+    Alert.alert(
+      'Leave this session?',
+      'The session keeps going for everyone else, and you can rejoin with the same link.',
+      [
+        { text: 'Stay', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            if (isLive && params.tripId) leaveLiveTrip(params.tripId).catch(() => {});
+            router.replace('/');
+          },
+        },
+      ]
+    );
+  };
 
   const retrace = (m: SimMember) => {
     if (m.trail.length > 1) {
@@ -266,15 +323,22 @@ export default function SessionScreen() {
           setAutoFit(false);
           setFollow(false); // keep the card open — just stop steering the camera
         }}
-        onLongPress={(e) => setPlacePick(e.nativeEvent.coordinate)}
+        onPress={(e) => {
+          if (!pickingDest) return;
+          setPickingDest(false);
+          setDestPick(e.nativeEvent.coordinate);
+        }}
+        onLongPress={(e) => !pickingDest && setPlacePick(e.nativeEvent.coordinate)}
       >
         <DestinationMarker
-          name={scenario.destination.name}
-          pos={scenario.destination.pos}
+          name={sim.destination?.name ?? ''}
+          pos={sim.destination?.pos ?? scenario.destination.pos}
+          visible={!!sim.destination}
           onPress={() =>
+            sim.destination &&
             navigateTo(
-              scenario.destination.pos,
-              scenario.destination.name,
+              sim.destination.pos,
+              sim.destination.name,
               scenario.key === 'roadtrip' ? 'drive' : 'walk'
             )
           }
@@ -346,15 +410,20 @@ export default function SessionScreen() {
         title={sessionName}
         sub={headerSub}
         highlightSub={sim.allArrived}
+        destinationName={sim.destination?.name ?? null}
         onBack={() => {
           if (isLive && params.tripId) leaveLiveTrip(params.tripId).catch(() => {});
           router.replace('/');
         }}
+        onSetDestination={() => setDestSearchOpen(true)}
         onInvite={() => setInviteOpen(true)}
+        onLeave={leaveSession}
+        onHeight={setHeaderH}
       />
 
       {!sheetOpen && (
       <MapFabs
+        top={headerH + 8}
         showTrails={showTrails}
         onToggleTrails={() => setShowTrails((v) => !v)}
         showRecenter={!autoFit || !!selectedId}
@@ -396,6 +465,43 @@ export default function SessionScreen() {
         />
       )}
 
+      {pickingDest && (
+        <Pressable style={[styles.pickHint, { top: headerH + 8 }]} onPress={() => setPickingDest(false)}>
+          <Text style={styles.pickHintText}>Tap the map to set the destination</Text>
+          <Text style={styles.pickHintCancel}>Cancel</Text>
+        </Pressable>
+      )}
+
+      {/* search a place: name, distance, stars, reviews, link (Yelp later) */}
+      <DestinationSheet
+        visible={destSearchOpen}
+        near={you?.pos ?? sim.members[0]?.pos ?? scenario.initialRegion}
+        current={sim.destination?.name ?? null}
+        onSet={(pos, name) => {
+          sim.setDestination(pos, name);
+          setDestSearchOpen(false);
+          setAutoFit(true);
+          fitCounter.current = 0;
+        }}
+        onPickOnMap={() => {
+          setDestSearchOpen(false);
+          setPickingDest(true);
+        }}
+        onClose={() => setDestSearchOpen(false)}
+      />
+
+      {/* named after tapping the map, when search isn't the right tool */}
+      <NameDestinationSheet
+        pos={destPick}
+        onSet={(name) => {
+          if (destPick) sim.setDestination(destPick, name);
+          setDestPick(null);
+          setAutoFit(true);
+          fitCounter.current = 0;
+        }}
+        onClose={() => setDestPick(null)}
+      />
+
       <InviteSheet
         visible={inviteOpen}
         sessionName={sessionName}
@@ -422,4 +528,18 @@ export default function SessionScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: UI.bg },
   memberArea: { position: 'absolute', left: 0, right: 0, bottom: DOCK_PEEK + 20 },
+  pickHint: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: UI.brand,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  pickHintText: { color: UI.bg, fontSize: 13.5, fontWeight: '700', flex: 1 },
+  pickHintCancel: { color: UI.bg, fontSize: 13, fontWeight: '700', opacity: 0.7 },
 });

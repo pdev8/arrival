@@ -17,6 +17,28 @@ export function formatEtaClock(minutes: number): string {
 }
 
 /**
+ * The headline number for a member, everywhere: an ETA when the group has a
+ * destination, and DISTANCE COVERED when it doesn't (free roam — there is
+ * nowhere to be, so the honest thing to show is what you've done, not what's
+ * left). `coarse` is for map tags, which must not re-render every second.
+ */
+export function memberHeadline(
+  m: { etaMin: number | null; left?: boolean; state: string; traveledM: number },
+  coarse = false
+): string {
+  if (m.left) return 'left';
+  if (m.etaMin == null) return formatDistance(m.traveledM); // free roam
+  if (m.state === 'arrived') return 'here';
+  return coarse ? formatEtaCoarse(m.etaMin) : formatEtaClock(m.etaMin);
+}
+
+/** what the headline number MEANS — the little label under it */
+export function headlineLabel(m: { etaMin: number | null; state: string }): string {
+  if (m.etaMin == null) return 'covered';
+  return m.state === 'arrived' ? '' : 'eta';
+}
+
+/**
  * ETA for the MAP TAG — coarse on purpose. A live m:ss countdown inside a
  * marker re-renders its custom view every second, and churning custom views
  * is what makes Apple Maps drop markers (#5911). Minutes change once a
@@ -53,16 +75,21 @@ export function statusLine(m: {
   left?: boolean;
   statusNote?: string;
   remainingM: number;
+  /** null = free roam: there's no "distance out" to report */
+  etaMin?: number | null;
   mode?: string;
   steps?: number;
 }): string {
+  const freeRoam = m.etaMin === null;
   let s = m.left
     ? 'Left — last known position'
-    : m.state === 'arrived'
+    : m.state === 'arrived' && !freeRoam
       ? 'Arrived'
       : m.state === 'stopped'
         ? (m.statusNote ?? 'Stopped')
-        : `${formatDistance(m.remainingM)} out`;
+        : freeRoam
+          ? (m.state === 'driving' ? 'Driving' : 'Walking')
+          : `${formatDistance(m.remainingM)} out`;
   if (!m.left && m.mode === 'foot' && (m.steps ?? 0) > 0) s += ` · ${m.steps!.toLocaleString()} steps`;
   return s;
 }

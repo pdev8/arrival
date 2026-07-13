@@ -131,8 +131,11 @@ describe('map contract: the marker’s custom view is static', () => {
     expect(markerCode).not.toMatch(/selected\s*&&\s*styles\./);
   });
 
-  it('the map tag uses the coarse ETA (a per-second countdown churns the view)', () => {
-    expect(markerCode).toMatch(/formatEtaCoarse/);
+  it('the map tag never draws a per-second countdown (it would churn the view)', () => {
+    // the puck asks for the COARSE headline (whole minutes / distance covered):
+    // either formatEtaCoarse directly, or memberHeadline(m, true)
+    expect(markerCode).toMatch(/formatEtaCoarse|memberHeadline\([^)]*,\s*true\s*\)/);
+    // the live m:ss clock belongs to the rail and the card, never the map
     expect(markerCode).not.toMatch(/formatEtaClock/);
   });
 });
