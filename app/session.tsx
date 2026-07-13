@@ -313,7 +313,6 @@ export default function SessionScreen() {
 
       {!sheetOpen && (
       <MapFabs
-        bottom={DOCK_PEEK + 130}
         showTrails={showTrails}
         onToggleTrails={() => setShowTrails((v) => !v)}
         showRecenter={!autoFit || !!selectedId}
