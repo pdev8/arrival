@@ -1,14 +1,31 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmbientMap } from '../src/components/AmbientMap';
 import { Glass } from '../src/components/Glass';
 import { SCENARIOS } from '../src/demo/data';
 import { seedNycArchive } from '../src/demo/nyc-archive';
 import { ArchivedSession, listArchives } from '../src/lib/archive';
-import { joinLiveTrip } from '../src/lib/live-session';
+import { createLiveTrip, joinLiveTrip } from '../src/lib/live-session';
+import {
+  DEFAULT_DURATION_MIN,
+  DEFAULT_KIND,
+  DURATIONS,
+  canStartSession,
+  makeJoinCode,
+} from '../src/lib/session-setup';
 import { supabaseConfigured } from '../src/lib/supabase';
 import { surfaceError } from '../src/lib/errors';
 import { UI } from '../src/lib/colors';
@@ -48,6 +65,10 @@ const DEMO = {
 export default function Home() {
   const router = useRouter();
   const [archives, setArchives] = useState<ArchivedSession[]>([]);
+  const [name, setName] = useState('');
+  const [durationMin, setDurationMin] = useState(DEFAULT_DURATION_MIN);
+  const [creating, setCreating] = useState(false);
+  const ready = canStartSession(name) && !creating;
 
   // seed the NYC walk on first run, then load whatever's archived
   useFocusEffect(
@@ -65,11 +86,54 @@ export default function Home() {
     }, [])
   );
 
+  // Live backend when configured (B2): the RPC mints the real join code.
+  // Kind and destination aren't asked for — they're the walk scenario until
+  // place search lands (M2).
+  const start = async () => {
+    if (!ready) return;
+    const trimmed = name.trim();
+    let code = makeJoinCode();
+    let tripId: string | undefined;
+    if (supabaseConfigured) {
+      setCreating(true);
+      try {
+        const trip = await createLiveTrip({
+          name: trimmed,
+          kind: DEFAULT_KIND,
+          durationMin,
+          destinationName: SCENARIOS.walk.destination.name,
+          destination: SCENARIOS.walk.destination.pos,
+        });
+        code = trip.joinCode;
+        tripId = trip.id;
+      } catch (e) {
+        surfaceError('Live session unavailable — demo mode', e);
+      } finally {
+        setCreating(false);
+      }
+    }
+    router.push({
+      pathname: '/session',
+      params: {
+        name: trimmed,
+        kind: DEFAULT_KIND,
+        durationMin: String(durationMin),
+        code,
+        ...(tripId ? { live: '1', tripId } : {}),
+      },
+    });
+  };
+
   return (
     <View style={styles.screen}>
       <AmbientMap />
       <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.top} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.top}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           <View style={styles.hero}>
             <View style={styles.mark}>
               <View style={styles.markDot} />
@@ -79,6 +143,48 @@ export default function Home() {
               One link puts your whole group on a shared map —{'\n'}every step, every stop, until everyone arrives.
             </Text>
           </View>
+
+          {/* Starting a session asks for the two things that actually vary: a
+              name and a length. Everything else has a sane default. */}
+          <Text style={styles.sectionTitle}>New session</Text>
+          <Glass style={styles.createCard} radius={24} intensity={32}>
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="Where are we headed?"
+              placeholderTextColor={UI.textDim}
+              returnKeyType="done"
+              onSubmitEditing={start}
+            />
+
+            <Text style={styles.label}>Session length</Text>
+            <View style={styles.chipRow}>
+              {DURATIONS.map((d) => (
+                <Pressable
+                  key={d.min}
+                  onPress={() => setDurationMin(d.min)}
+                  style={[styles.chip, durationMin === d.min && styles.chipActive]}
+                >
+                  <Text style={[styles.chipText, durationMin === d.min && styles.chipTextActive]}>
+                    {d.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable
+              style={[styles.primaryBtn, styles.createBtn, !ready && styles.primaryBtnOff]}
+              onPress={start}
+              disabled={!ready}
+            >
+              <Text style={styles.primaryBtnText}>
+                {creating ? 'Creating…' : 'Start a session'}
+              </Text>
+            </Pressable>
+            <Text style={styles.cardNote}>Location sharing ends when the session does.</Text>
+          </Glass>
 
           <Glass style={styles.features} radius={24} intensity={32}>
             {FEATURES.map((f, i) => (
@@ -169,9 +275,6 @@ export default function Home() {
         </ScrollView>
 
         <View style={styles.actions}>
-          <Pressable style={styles.primaryBtn} onPress={() => router.push('/create')}>
-            <Text style={styles.primaryBtnText}>Start a session</Text>
-          </Pressable>
           <Pressable
             onPress={() => {
               if (!supabaseConfigured) {
@@ -227,6 +330,40 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: -6,
   },
+  createCard: { padding: 16, paddingTop: 4 },
+  label: {
+    color: UI.textDim,
+    fontSize: 11.5,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    color: UI.text,
+    fontSize: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  chipRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  chip: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  chipActive: { backgroundColor: '#fff', borderColor: '#fff' },
+  chipText: { color: UI.text, fontSize: 14.5, fontWeight: '600' },
+  chipTextActive: { color: UI.bg },
+  createBtn: { marginTop: 18 },
+  cardNote: { color: UI.textDim, fontSize: 12, textAlign: 'center', marginTop: 10 },
   demoCard: { padding: 14, gap: 8, borderColor: `${UI.brand}55` },
   demoTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   livePip: {
@@ -259,7 +396,7 @@ const styles = StyleSheet.create({
   },
   archiveName: { color: UI.text, fontSize: 14, fontWeight: '700' },
   archiveMeta: { color: UI.textDim, fontSize: 12, marginTop: 1 },
-  hero: { alignItems: 'center', paddingVertical: 38 },
+  hero: { alignItems: 'center', paddingTop: 26, paddingBottom: 24 },
   mark: {
     width: 52,
     height: 52,
@@ -294,6 +431,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryBtnText: { color: UI.bg, fontSize: 16, fontWeight: '700' },
+  primaryBtnOff: { opacity: 0.4 },
   secondaryBtn: { paddingVertical: 15, alignItems: 'center' },
   secondaryBtnText: { color: UI.text, fontSize: 16, fontWeight: '600' },
   demoNote: { color: UI.textDim, fontSize: 12, textAlign: 'center', marginTop: 4 },
