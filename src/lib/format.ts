@@ -16,6 +16,22 @@ export function formatEtaClock(minutes: number): string {
   return h > 0 ? `${h}:${pad(m)} hr` : `${m}:${pad(s)}`;
 }
 
+/**
+ * ETA for the MAP TAG — coarse on purpose. A live m:ss countdown inside a
+ * marker re-renders its custom view every second, and churning custom views
+ * is what makes Apple Maps drop markers (#5911). Minutes change once a
+ * minute, so the puck's view tree effectively never re-renders. The rail and
+ * the member card keep the live countdown (formatEtaClock).
+ */
+export function formatEtaCoarse(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 1) return 'now';
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${m % 60}m`;
+  return `${(m / 1440).toFixed(1)} days`;
+}
+
 export function formatDistance(meters: number): string {
   const mi = meters / 1609.34;
   if (mi < 0.19) return `${Math.round(meters * 3.281)} ft`;

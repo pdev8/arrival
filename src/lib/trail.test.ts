@@ -1,5 +1,5 @@
 import { LatLng, cumulativeDistances } from './geo';
-import { TRAIL_PARTS, alphaHex, buildSegments } from './trail';
+import { TRAIL_PARTS, alphaHex, buildSegments, headSegment } from './trail';
 
 const line = (n: number): LatLng[] =>
   Array.from({ length: n }, (_, i) => ({ latitude: 40.73 + i * 0.001, longitude: -73.99 }));
@@ -50,5 +50,27 @@ describe('alphaHex', () => {
     expect(alphaHex(0)).toBe('00');
     expect(alphaHex(1)).toBe('ff');
     expect(alphaHex(0.5)).toBe('80');
+  });
+});
+
+describe('headSegment (the live dot that follows a moving member)', () => {
+  const a = { latitude: 37.75, longitude: -122.4 };
+  const b = { latitude: 37.76, longitude: -122.4 };
+
+  it('always returns 3 points — 2-point polylines vanish on Apple Maps (#5285)', () => {
+    expect(headSegment(a, b)).toHaveLength(3);
+  });
+  it('ends exactly at the member, so the trail never lags behind them', () => {
+    const seg = headSegment(a, b);
+    expect(seg[seg.length - 1]).toEqual(b);
+  });
+  it('starts at the anchor and puts the injected point between them', () => {
+    const [start, mid] = headSegment(a, b);
+    expect(start).toEqual(a);
+    expect(mid.latitude).toBeGreaterThan(a.latitude);
+    expect(mid.latitude).toBeLessThan(b.latitude);
+  });
+  it('draws nothing without an anchor', () => {
+    expect(headSegment(null, b)).toEqual([]);
   });
 });
