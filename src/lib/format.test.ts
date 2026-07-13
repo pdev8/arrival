@@ -1,4 +1,4 @@
-import { compassDir, formatDistance, formatEtaClock, formatEtaCoarse, formatLevel, statusLine, timeAgo } from './format';
+import { compassDir, formatDistance, formatEtaClock, formatEtaCoarse, formatLevel, headlineLabel, memberHeadline, statusLine, timeAgo } from './format';
 
 describe('formatEtaClock', () => {
   it('renders minutes:seconds', () => {
@@ -109,5 +109,55 @@ describe('formatEtaCoarse (map tags — must change rarely)', () => {
   });
   it('never goes negative', () => {
     expect(formatEtaCoarse(-9)).toBe('now');
+  });
+});
+
+describe('memberHeadline — free roam shows what you DID, not what’s left', () => {
+  const m = (over: Partial<{ etaMin: number | null; left: boolean; state: string; traveledM: number }> = {}) => ({
+    etaMin: 12 as number | null,
+    state: 'walking',
+    traveledM: 1600,
+    ...over,
+  });
+
+  it('shows an ETA when the group has a destination', () => {
+    expect(memberHeadline(m({ etaMin: 12 }))).toBe('12:00');
+  });
+  it('shows distance covered when there is no destination', () => {
+    expect(memberHeadline(m({ etaMin: null }))).toBe('1.0 mi');
+  });
+  it('coarse form (map tags) still shows distance covered in free roam', () => {
+    expect(memberHeadline(m({ etaMin: null }), true)).toBe('1.0 mi');
+  });
+  it('coarse form rounds the ETA to minutes so marker views do not churn', () => {
+    expect(memberHeadline(m({ etaMin: 12.4 }), true)).toBe('12m');
+  });
+  it('departed members read "left" regardless', () => {
+    expect(memberHeadline(m({ left: true, etaMin: null }))).toBe('left');
+  });
+  it('arrived reads "here" — but only when there is somewhere to arrive', () => {
+    expect(memberHeadline(m({ state: 'arrived' }))).toBe('here');
+    expect(memberHeadline(m({ state: 'arrived', etaMin: null }))).toBe('1.0 mi');
+  });
+});
+
+describe('headlineLabel', () => {
+  it('labels the number "eta" with a destination, "covered" without one', () => {
+    expect(headlineLabel({ etaMin: 5, state: 'walking' })).toBe('eta');
+    expect(headlineLabel({ etaMin: null, state: 'walking' })).toBe('covered');
+  });
+  it('drops the label once someone has arrived', () => {
+    expect(headlineLabel({ etaMin: 0, state: 'arrived' })).toBe('');
+  });
+});
+
+describe('statusLine — free roam', () => {
+  it('never claims a distance "out" when there is no destination', () => {
+    expect(statusLine({ state: 'walking', etaMin: null, remainingM: 0, mode: 'foot', steps: 900 })).toBe(
+      'Walking · 900 steps'
+    );
+  });
+  it('still reports a stop note in free roam', () => {
+    expect(statusLine({ state: 'stopped', etaMin: null, statusNote: 'Coffee', remainingM: 0 })).toBe('Coffee');
   });
 });

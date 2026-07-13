@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FeedEvent, SessionStop, SimMember, Simulation, StopCategory } from '../demo/simulation';
+import { Destination, FeedEvent, SessionStop, SimMember, Simulation, StopCategory } from '../demo/simulation';
 import { surfaceError } from '../lib/errors';
 import { LatLng, distanceM } from '../lib/geo';
 import { ensureSignedIn, supabase } from '../lib/supabase';
@@ -58,13 +58,18 @@ interface PosPayload {
 export function useLiveTrip(
   enabled: boolean,
   tripId: string | undefined,
-  destination: { name: string; pos: LatLng },
+  /** null = free roam. The destination is TRIP state: it can be set (or
+   *  changed) after the session has started, and every member sees it. */
+  initialDestination: Destination | null,
   youName: string
 ): Simulation | null {
   const membersRef = useRef(new Map<string, WireMember>());
   const namesRef = useRef(new Map<string, string>());
   const youIdRef = useRef<string | null>(null);
   const startAtRef = useRef(0);
+  const [destination, setDest] = useState<Destination | null>(initialDestination);
+  const destRef = useRef<Destination | null>(initialDestination);
+  destRef.current = destination;
   const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [stops, setStops] = useState<SessionStop[]>([]);
   const [tick, setTick] = useState(0); // bumped on every wire update
@@ -79,6 +84,25 @@ export function useLiveTrip(
     let lastPublish = 0;
     startAtRef.current = Date.now();
     const bump = () => !dead && setTick((t) => t + 1);
+
+    /** the destination is TRIP state: read it, then follow it live — anyone
+     *  can set or change it mid-session and everyone must see the same flag */
+    const loadDestination = async () => {
+      const { data, error } = await supabase!
+        .from('trips')
+        .select('destination_name,destination_lat,destination_lng')
+        .eq('id', tripId)
+        .maybeSingle();
+      if (error || dead || !data) return;
+      const next =
+        data.destination_lat != null && data.destination_lng != null
+          ? {
+              name: data.destination_name ?? 'Destination',
+              pos: { latitude: data.destination_lat, longitude: data.destination_lng },
+            }
+          : null;
+      setDest(next);
+    };
 
     const loadRoster = async (youId: string) => {
       const { data: rows, error } = await supabase!
@@ -106,7 +130,7 @@ export function useLiveTrip(
             speed: r.last_speed,
             arrivedState: r.state === 'arrived',
           },
-          destination.pos,
+          destRef.current?.pos ?? null,
           ARRIVE_RADIUS_M
         );
         membersRef.current.set(r.user_id, {
@@ -171,7 +195,7 @@ export function useLiveTrip(
       }
       membersRef.current.set(p.id, {
         ...m,
-        ...applyBroadcast(m, p, destination.pos, ARRIVE_RADIUS_M, Date.now()),
+        ...applyBroadcast(m, p, destRef.current?.pos ?? null, ARRIVE_RADIUS_M, Date.now()),
       });
       bump();
     };
@@ -184,7 +208,7 @@ export function useLiveTrip(
           ({ error }) => error && console.warn('display name', error.message)
         );
         await loadRoster(youId);
-        await Promise.all([loadFeed(youId), loadStops(youId)]);
+        await Promise.all([loadDestination(), loadFeed(youId), loadStops(youId)]);
 
         const refreshStops = () => loadStops(youId);
         const channel = supabase!
@@ -225,6 +249,11 @@ export function useLiveTrip(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'stops', filter: `trip_id=eq.${tripId}` },
             refreshStops
+          )
+          .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'trips', filter: `id=eq.${tripId}` },
+            loadDestination
           )
           .on('postgres_changes', { event: '*', schema: 'public', table: 'stop_votes' }, refreshStops)
           .on(
@@ -346,6 +375,24 @@ export function useLiveTrip(
     [tripId]
   );
 
+  const setDestination = useCallback(
+    (pos: LatLng, name: string) => {
+      if (!supabase || !tripId) return;
+      // optimistic: the flag lands immediately for you, and the realtime
+      // trips UPDATE brings everyone else along
+      setDest({ pos, name });
+      supabase
+        .rpc('set_destination', {
+          p_trip_id: tripId,
+          p_name: name,
+          p_lat: pos.latitude,
+          p_lng: pos.longitude,
+        })
+        .then(({ error }) => error && surfaceError('Setting the destination', error));
+    },
+    [tripId]
+  );
+
   const react = useCallback((eventId: string, emoji: string) => {
     const youId = youIdRef.current;
     if (!supabase || !youId) return;
@@ -380,13 +427,18 @@ export function useLiveTrip(
         heading: m.heading,
         level: null,
         trail: m.trail,
-        ...simMotion(m, destination.pos),
+        ...simMotion(m, destination?.pos ?? null),
       }));
     return {
       members,
       stops,
       feed,
+      destination,
+      setDestination,
+      // free roam never "completes" — there's nowhere to arrive. It ends when
+      // someone ends it.
       allArrived:
+        !!destination &&
         members.filter((m) => !m.left).length > 0 &&
         members.filter((m) => !m.left).every((m) => m.state === 'arrived'),
       arrivalOrder: [],
@@ -398,5 +450,5 @@ export function useLiveTrip(
       suggestStop: postStop('suggestion'),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, tripId, tick, feed, stops, vote, react, joinStop, postStop]);
+  }, [enabled, tripId, tick, feed, stops, destination, setDestination, vote, react, joinStop, postStop]);
 }

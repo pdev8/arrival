@@ -23,6 +23,7 @@ import {
   DEFAULT_DURATION_MIN,
   DEFAULT_KIND,
   DURATIONS,
+  FREE_ROAM_MIN,
   canStartSession,
   makeJoinCode,
 } from '../src/lib/session-setup';
@@ -67,6 +68,9 @@ export default function Home() {
   const [archives, setArchives] = useState<ArchivedSession[]>([]);
   const [name, setName] = useState('');
   const [durationMin, setDurationMin] = useState(DEFAULT_DURATION_MIN);
+  /** free roam: no destination, no clock — just track us and keep the trails.
+   *  The group can set a destination later, from inside the session. */
+  const [freeRoam, setFreeRoam] = useState(false);
   const [creating, setCreating] = useState(false);
   const ready = canStartSession(name) && !creating;
 
@@ -100,9 +104,14 @@ export default function Home() {
         const trip = await createLiveTrip({
           name: trimmed,
           kind: DEFAULT_KIND,
-          durationMin,
-          destinationName: SCENARIOS.walk.destination.name,
-          destination: SCENARIOS.walk.destination.pos,
+          // free roam has no end time either: it runs until someone ends it
+          durationMin: freeRoam ? FREE_ROAM_MIN : durationMin,
+          ...(freeRoam
+            ? {}
+            : {
+                destinationName: SCENARIOS.walk.destination.name,
+                destination: SCENARIOS.walk.destination.pos,
+              }),
         });
         code = trip.joinCode;
         tripId = trip.id;
@@ -117,8 +126,9 @@ export default function Home() {
       params: {
         name: trimmed,
         kind: DEFAULT_KIND,
-        durationMin: String(durationMin),
+        durationMin: String(freeRoam ? FREE_ROAM_MIN : durationMin),
         code,
+        ...(freeRoam ? { freeRoam: '1' } : {}),
         ...(tripId ? { live: '1', tripId } : {}),
       },
     });
@@ -159,9 +169,22 @@ export default function Home() {
               onSubmitEditing={start}
             />
 
-            <Text style={styles.label}>Session length</Text>
+            <Pressable style={styles.roamRow} onPress={() => setFreeRoam((v) => !v)}>
+              <View style={[styles.check, freeRoam && styles.checkOn]}>
+                {freeRoam && <MaterialCommunityIcons name="check" size={12} color={UI.bg} />}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.roamTitle}>Free roam</Text>
+                <Text style={styles.roamSub}>
+                  No destination, no clock — just track us and keep the trails. You can set a
+                  destination later, once you’ve decided.
+                </Text>
+              </View>
+            </Pressable>
+
+            {!freeRoam && <Text style={styles.label}>Session length</Text>}
             <View style={styles.chipRow}>
-              {DURATIONS.map((d) => (
+              {!freeRoam && DURATIONS.map((d) => (
                 <Pressable
                   key={d.min}
                   onPress={() => setDurationMin(d.min)}
@@ -383,6 +406,20 @@ const styles = StyleSheet.create({
   face: { width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, backgroundColor: UI.bg },
   facepile: { flexDirection: 'row', flex: 1 },
   demoGo: { color: UI.brand, fontSize: 13, fontWeight: '700' },
+  roamRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 4 },
+  check: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkOn: { backgroundColor: UI.brand, borderColor: UI.brand },
+  roamTitle: { color: UI.text, fontSize: 14, fontWeight: '700' },
+  roamSub: { color: UI.textDim, fontSize: 12, marginTop: 2, lineHeight: 16 },
   archives: { paddingHorizontal: 14 },
   archiveRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 11 },
   archiveRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.1)' },

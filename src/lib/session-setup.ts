@@ -15,6 +15,14 @@ export const DURATIONS = [
 
 export const DEFAULT_DURATION_MIN = 240;
 
+/**
+ * Free roam has no clock. It still needs SOME end date on the row (the backend
+ * expires trips), so it gets a long one — a week — and the only real way it
+ * ends is someone pressing End. A session that quietly expires mid-walk is
+ * worse than one that lingers in an archive.
+ */
+export const FREE_ROAM_MIN = 7 * 24 * 60;
+
 /** the one scenario a new session runs; session.tsx falls back to it anyway */
 export const DEFAULT_KIND = 'walk';
 

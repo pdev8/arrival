@@ -66,7 +66,8 @@ export interface Snapshot {
 export function mergeSnapshot(
   existing: Tracked | undefined,
   snap: Snapshot,
-  destPos: LatLng,
+  /** null = free roam: nowhere to arrive, nothing to measure against */
+  destPos: LatLng | null,
   arriveRadiusM: number
 ): Tracked {
   const useSnap = !!snap.pos && (!existing?.pos || snap.at > (existing?.lastAt ?? 0));
@@ -76,11 +77,11 @@ export function mergeSnapshot(
     heading: useSnap ? (snap.heading ?? existing?.heading ?? 0) : (existing?.heading ?? snap.heading ?? 0),
     speed: useSnap ? (snap.speed ?? null) : (existing?.speed ?? snap.speed ?? null),
     trail: useSnap && snap.pos ? appendToTrail(existing?.trail ?? [], snap.pos) : (existing?.trail ?? []),
-    firstRemainingM: existing?.firstRemainingM ?? (pos ? distanceM(pos, destPos) : null),
+    firstRemainingM: existing?.firstRemainingM ?? (pos && destPos ? distanceM(pos, destPos) : null),
     arrived:
       (existing?.arrived ?? false) ||
       snap.arrivedState ||
-      (!!pos && distanceM(pos, destPos) <= arriveRadiusM),
+      (!!pos && !!destPos && distanceM(pos, destPos) <= arriveRadiusM),
     lastAt: useSnap ? snap.at : (existing?.lastAt ?? 0),
   };
 }
@@ -90,7 +91,8 @@ export function mergeSnapshot(
 export function applyBroadcast(
   m: Tracked,
   p: { lat: number; lng: number; heading: number | null; speed: number | null },
-  destPos: LatLng,
+  /** null = free roam */
+  destPos: LatLng | null,
   arriveRadiusM: number,
   now: number
 ): Tracked {
@@ -100,8 +102,8 @@ export function applyBroadcast(
     heading: p.heading ?? m.heading,
     speed: p.speed,
     trail: appendToTrail(m.trail, pos),
-    firstRemainingM: m.firstRemainingM ?? distanceM(pos, destPos),
-    arrived: m.arrived || distanceM(pos, destPos) <= arriveRadiusM,
+    firstRemainingM: m.firstRemainingM ?? (destPos ? distanceM(pos, destPos) : null),
+    arrived: m.arrived || (!!destPos && distanceM(pos, destPos) <= arriveRadiusM),
     lastAt: now,
   };
 }
@@ -111,12 +113,21 @@ export function applyBroadcast(
  * eta, steps, progress). Requires a position — callers filter posless
  * members out before mapping.
  */
-export function simMotion(m: Tracked, destPos: LatLng) {
+export function simMotion(m: Tracked, destPos: LatLng | null) {
   const pos = m.pos!;
-  const remainingM = Math.max(0, distanceM(pos, destPos));
   const traveledM = trailDistanceM(m.trail);
   const state = stateFromSpeed(m.speed, m.arrived);
   const mode = state === 'driving' ? ('car' as const) : ('foot' as const);
+  const steps = mode === 'foot' ? Math.round(traveledM / STRIDE_M) : 0;
+
+  // FREE ROAM: nowhere to be. Distance-to-go, ETA and progress are not "zero",
+  // they're meaningless — the UI reads etaMin == null and shows what the
+  // session IS about instead: distance covered and steps.
+  if (!destPos) {
+    return { state, mode, remainingM: 0, traveledM, etaMin: null, steps, progress: 0 };
+  }
+
+  const remainingM = Math.max(0, distanceM(pos, destPos));
   const first = m.firstRemainingM ?? remainingM;
   return {
     state,
@@ -124,7 +135,7 @@ export function simMotion(m: Tracked, destPos: LatLng) {
     remainingM,
     traveledM,
     etaMin: m.arrived ? 0 : straightLineEtaMin(pos, destPos, m.speed),
-    steps: mode === 'foot' ? Math.round(traveledM / STRIDE_M) : 0,
+    steps,
     progress: first > 0 ? Math.min(1, 1 - remainingM / first) : 1,
   };
 }

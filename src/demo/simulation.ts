@@ -49,8 +49,10 @@ export interface SimMember {
   pos: LatLng;
   heading: number;
   state: MemberState;
-  /** real-time minutes to destination */
-  etaMin: number;
+  /** real-time minutes to destination — NULL in free roam (no destination):
+   *  not "zero minutes away", but "there is nowhere to be". Every surface that
+   *  shows an ETA must handle it. */
+  etaMin: number | null;
   remainingM: number;
   /** foot vs car — decides whether a step count is meaningful */
   mode: 'foot' | 'car';
@@ -132,6 +134,15 @@ export interface Simulation {
   members: SimMember[];
   stops: SessionStop[];
   feed: FeedEvent[];
+  /**
+   * Where the group is heading — or NULL, which is a first-class state, not a
+   * missing value. A session can start as free roam (just track us and keep
+   * our trails) and get a destination later, because people decide where
+   * they're going after they're already out.
+   */
+  destination: Destination | null;
+  /** set or change the destination mid-session; everyone sees it */
+  setDestination: (pos: LatLng, name: string) => void;
   allArrived: boolean;
   /** member ids in arrival order (first → last so far) */
   arrivalOrder: string[];
@@ -150,7 +161,17 @@ const SCRIPTED_SUGGEST_ID = 'sugg-scripted';
 /** how close (m) the POI must be to a member's route to make them pull over */
 const ON_ROUTE_TOLERANCE_M = 300;
 
-export function useSimulation(running: boolean, scenario: Scenario): Simulation {
+export interface Destination {
+  name: string;
+  pos: LatLng;
+}
+
+export function useSimulation(
+  running: boolean,
+  scenario: Scenario,
+  /** null = free roam: the session starts with nowhere to be */
+  initialDestination: Destination | null = scenario.destination
+): Simulation {
   const sim = useRef<SimState | null>(null);
 
   if (!sim.current) {
@@ -281,6 +302,19 @@ export function useSimulation(running: boolean, scenario: Scenario): Simulation 
     [publish]
   );
 
+  const [destination, setDest] = useState<Destination | null>(initialDestination);
+  const setDestination = useCallback(
+    (pos: LatLng, name: string) => {
+      setDest({ pos, name });
+      const s = sim.current;
+      if (s) {
+        pushFeed(s, 'you', `You set the destination: ${name}`);
+        publish();
+      }
+    },
+    [publish]
+  );
+
   const suggestStop = useCallback(
     (pos: LatLng, category: StopCategory, note: string) => {
       const s = sim.current!;
@@ -303,7 +337,16 @@ export function useSimulation(running: boolean, scenario: Scenario): Simulation 
     [publish]
   );
 
-  return { ...snapshot, vote, react, joinStop, announceStop, suggestStop };
+  return {
+    ...snapshot,
+    destination,
+    setDestination,
+    vote,
+    react,
+    joinStop,
+    announceStop,
+    suggestStop,
+  };
 }
 
 function pushFeed(s: SimState, memberId: string | undefined, text: string) {

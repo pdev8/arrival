@@ -6,16 +6,18 @@
  * nobody and the pile looks broken.
  */
 /**
- * Member surface ordering: you first, then active members fastest ETA
- * first, departed members last. Sort is stable, so equal keys keep their
- * incoming order.
+ * Member surface ordering: you first, then active members fastest ETA first,
+ * departed members last. In FREE ROAM there is no ETA, so the meaningful
+ * ranking is who's covered the most ground. Sort is stable, so equal keys keep
+ * their incoming order.
  */
-export function sortMembers<T extends { id: string; etaMin: number; left?: boolean }>(
+export function sortMembers<T extends { id: string; etaMin: number | null; traveledM: number; left?: boolean }>(
   members: T[],
   youId: string
 ): T[] {
   const rank = (m: T) => (m.id === youId ? 0 : m.left ? 2 : 1);
-  return [...members].sort((a, b) => rank(a) - rank(b) || a.etaMin - b.etaMin);
+  const key = (m: T) => (m.etaMin == null ? -m.traveledM : m.etaMin);
+  return [...members].sort((a, b) => rank(a) - rank(b) || key(a) - key(b));
 }
 
 export function rosterPile<T extends { id: string }>(
