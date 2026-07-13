@@ -68,6 +68,21 @@ describe('map contract: MapView’s child list is static', () => {
     expect(session).not.toMatch(/useClusters|clusterVisibility|ClusterMarker/);
   });
 
+  it('never maps over stops — that array GROWS at runtime (scripted + user stops)', () => {
+    // this one shipped past the first version of this contract: sim.stops starts
+    // empty and every push grew the child list, re-adding every annotation and
+    // flashing MapKit's default red pin
+    expect(mapCode).not.toMatch(/sim\.stops\.map\(/);
+  });
+
+  it('renders stop pins as a FIXED pre-mounted pool', () => {
+    expect(mapCode).toMatch(/Array\.from\(\{\s*length:\s*MAX_STOP_PINS/);
+  });
+
+  it('the pin pool is sized by the simulation’s own cap (no stop without a slot)', () => {
+    expect(session).toMatch(/const MAX_STOP_PINS = MAX_STOPS;/);
+  });
+
   it('renders one TrailPath per member, unconditionally', () => {
     expect(mapCode).toMatch(/sim\.members\.map\([\s\S]{0,120}<TrailPath/);
   });

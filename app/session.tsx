@@ -14,7 +14,7 @@ import { SessionHeader } from '../src/components/SessionHeader';
 import { StopPin } from '../src/components/StopPin';
 import { TrailPath } from '../src/components/TrailPath';
 import { SCENARIOS } from '../src/demo/data';
-import { SimMember, useSimulation } from '../src/demo/simulation';
+import { MAX_STOPS, SimMember, useSimulation } from '../src/demo/simulation';
 import { useLiveTrip } from '../src/live/useLiveTrip';
 import { leaveLiveTrip } from '../src/lib/live-session';
 import { supabaseConfigured } from '../src/lib/supabase';
@@ -27,6 +27,10 @@ import { navigateTo } from '../src/lib/nav-deeplinks';
 import { sortMembers } from '../src/lib/roster';
 
 const FIT_PADDING = { top: 130, right: 60, bottom: 320, left: 60 };
+/** stop-pin slots, pre-mounted: MapView's child list must never grow (see the
+ *  map contract). MAX_STOPS is the sim's own cap — one source of truth, so a
+ *  stop can never exist without a slot to render into. */
+const MAX_STOP_PINS = MAX_STOPS;
 const TRAIL_PADDING = { top: 150, right: 70, bottom: 340, left: 70 };
 /** follow-mode zoom per scenario kind (Google provider reads zoom…) */
 const FOLLOW_ZOOM: Record<string, number> = { walk: 16.5, roadtrip: 11, mall: 18 };
@@ -276,15 +280,6 @@ export default function SessionScreen() {
           }
         />
 
-        {sim.stops.map((s) => (
-          <StopPin
-            key={s.id}
-            stop={s}
-            memberColor={sim.members.find((m) => m.id === s.createdBy)?.color ?? UI.accent}
-            onPress={() => {}}
-          />
-        ))}
-
         {/* MEMBER MARKERS COME FIRST, and nothing may be mounted above them.
             Anything that mounts ahead of a marker shifts its index in
             MapView's child list; rn-maps re-reconciles the annotations, and
@@ -307,6 +302,29 @@ export default function SessionScreen() {
             onPress={() => select(m.id)}
           />
         ))}
+
+        {/* Stop pins are a FIXED POOL, for the same reason the trails are:
+            sim.stops starts EMPTY and grows at runtime (scripted stops fire
+            ~20s in; long-press adds your own). Pushing one grew MapView's
+            child list — which re-adds EVERY marker annotation (see the trail
+            comment below) — and it did so ABOVE the member markers, shifting
+            their index too. A brand-new pin's react children aren't attached
+            when MapKit re-queries viewForAnnotation, so rn-maps handed back a
+            default MKMarkerAnnotationView: a big red balloon. Slots now mount
+            once; unused ones are transparent and untappable. */}
+        {Array.from({ length: MAX_STOP_PINS }, (_, i) => {
+          const s = sim.stops[i];
+          return (
+            <StopPin
+              key={`stop-slot-${i}`}
+              stop={s}
+              memberColor={
+                s ? (sim.members.find((m) => m.id === s.createdBy)?.color ?? UI.accent) : UI.accent
+              }
+              fallbackPos={scenario.destination.pos}
+            />
+          );
+        })}
 
         {/* Trails render LAST and are ALWAYS MOUNTED — one TrailPath per
             member for the life of the session, hidden ones simply carrying no

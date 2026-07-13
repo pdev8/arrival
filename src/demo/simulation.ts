@@ -14,6 +14,13 @@ import { Reactions, toggleReaction } from './reactions';
 
 /** simulation tick interval — 4 Hz keeps marker motion fluid */
 const TICK_MS = 250;
+/**
+ * Hard cap on stops. The map pre-mounts exactly this many pin slots
+ * (MAX_STOP_PINS in session.tsx) because MapView's child list must never grow
+ * at runtime — see .claude/skills/arrival-map/SKILL.md. A stop beyond the cap
+ * would have no slot to render into, so it is not created at all.
+ */
+export const MAX_STOPS = 12;
 
 /** Adaptive tick: once everyone has arrived nothing on the map moves, so the
  *  clock drops to 1 Hz (feed timestamps still age). Exported for tests. */
@@ -253,7 +260,7 @@ export function useSimulation(running: boolean, scenario: Scenario): Simulation 
       const s = sim.current!;
       const you = s.members.get('you')!;
       const name = note.trim() || 'Quick stop';
-      s.stops.push({
+      if (s.stops.length < MAX_STOPS) s.stops.push({
         id: `stop-you-${s.feedSeq}`,
         kind: 'announcement',
         status: 'active',
@@ -278,7 +285,7 @@ export function useSimulation(running: boolean, scenario: Scenario): Simulation 
     (pos: LatLng, category: StopCategory, note: string) => {
       const s = sim.current!;
       const name = note.trim() || 'Suggested stop';
-      s.stops.push({
+      if (s.stops.length < MAX_STOPS) s.stops.push({
         id: `sugg-you-${s.feedSeq}`,
         kind: 'suggestion',
         status: 'proposed',
@@ -319,7 +326,7 @@ function tick(s: SimState, dtSec: number) {
   if (!s.scriptedSuggestPosted && s.elapsed >= suggestEvent.atElapsedSec) {
     s.scriptedSuggestPosted = true;
     const who = memberName(s, suggestEvent.memberId);
-    s.stops.push({
+    if (s.stops.length < MAX_STOPS) s.stops.push({
       id: SCRIPTED_SUGGEST_ID,
       kind: 'suggestion',
       status: 'proposed',
@@ -353,7 +360,7 @@ function tick(s: SimState, dtSec: number) {
       s.scriptedStopPosted = true;
       m.stopUntil = s.elapsed + stopEvent.durationSec;
       m.statusNote = stopEvent.note.toLowerCase();
-      s.stops.push({
+      if (s.stops.length < MAX_STOPS) s.stops.push({
         id: SCRIPTED_STOP_ID,
         kind: 'announcement',
         status: 'active',
