@@ -49,7 +49,9 @@ begin
 end;
 $$;
 
-grant execute on function public.set_destination(uuid, text, double precision, double precision) to authenticated, anon;
+-- (no explicit grant: Supabase's default privileges already let members call
+-- public functions — every other RPC here relies on the same. An explicit
+-- grant to `anon` also breaks CI, whose stub Postgres has no such role.)
 
 -- NOTE: there is deliberately no end_trip RPC. Leaving is personal (it marks
 -- left_at on YOUR row — 0004 — and the session runs on without you, so you can
