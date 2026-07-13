@@ -23,6 +23,17 @@ export function buildSegments(trail: LatLng[]): LatLng[][] {
   return segs;
 }
 
+/**
+ * The live head of a trail: bridges the last settled body point to where the
+ * member is right now, so a dot follows anyone who's moving. Returns 3 points
+ * (a midpoint is injected) because Apple Maps silently drops 2-point
+ * polylines (react-native-maps #5285), or [] when there's nothing to draw.
+ */
+export function headSegment(anchor: LatLng | null, pos: LatLng): LatLng[] {
+  if (!anchor) return [];
+  return [anchor, lerp(anchor, pos, 0.5), pos];
+}
+
 /** 0..1 alpha → 2-digit hex suffix for #RRGGBBAA colors */
 export const alphaHex = (a: number) =>
   Math.round(a * 255)

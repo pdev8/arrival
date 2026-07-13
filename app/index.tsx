@@ -1,10 +1,11 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmbientMap } from '../src/components/AmbientMap';
 import { Glass } from '../src/components/Glass';
+import { SCENARIOS } from '../src/demo/data';
 import { seedNycArchive } from '../src/demo/nyc-archive';
 import { ArchivedSession, listArchives } from '../src/lib/archive';
 import { joinLiveTrip } from '../src/lib/live-session';
@@ -32,6 +33,13 @@ const FEATURES = [
     sub: 'Suggest a detour — the group decides',
   },
 ];
+
+/** the NYC walk this project started with — 7 people, real routes, photos */
+const DEMO = {
+  name: 'Saturday in the Village',
+  code: 'kfx-mqvp-dhz',
+  crew: SCENARIOS.walk.members,
+};
 
 /**
  * Home sits on a live, slowly drifting map — the glass genuinely blurs the
@@ -85,6 +93,48 @@ export default function Home() {
               </View>
             ))}
           </Glass>
+
+          {/* The demo session: the NYC walk that started this project, running
+              live with the whole crew — the one place to see every feature
+              (trails, stops, votes, reactions, convergence, recap) without a
+              second phone. */}
+          <Text style={styles.sectionTitle}>Demo session</Text>
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: '/session',
+                params: { name: DEMO.name, kind: 'walk', durationMin: '240', code: DEMO.code },
+              })
+            }
+          >
+            <Glass style={styles.demoCard} radius={24} intensity={32}>
+              <View style={styles.demoTop}>
+                <View style={styles.livePip}>
+                  <View style={styles.livePipDot} />
+                  <Text style={styles.livePipText}>Live</Text>
+                </View>
+                <Text style={styles.demoName} numberOfLines={1}>{DEMO.name}</Text>
+              </View>
+              <Text style={styles.demoSub}>
+                {DEMO.crew.length} people walking to {SCENARIOS.walk.destination.name} — trails, stops,
+                votes and reactions, all running.
+              </Text>
+              <View style={styles.demoBottom}>
+                <View style={styles.facepile}>
+                  {DEMO.crew.map((m, i) => (
+                    <Image
+                      key={m.id}
+                      source={m.avatar}
+                      fadeDuration={0}
+                      style={[styles.face, { borderColor: m.color, marginLeft: i === 0 ? 0 : -9 }]}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.demoGo}>Open</Text>
+                <MaterialCommunityIcons name="chevron-right" size={18} color={UI.brand} />
+              </View>
+            </Glass>
+          </Pressable>
 
           {archives.length > 0 && (
             <>
@@ -177,6 +227,25 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: -6,
   },
+  demoCard: { padding: 14, gap: 8, borderColor: `${UI.brand}55` },
+  demoTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  livePip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: `${UI.brand}24`,
+    borderRadius: 7,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  livePipDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: UI.brand },
+  livePipText: { color: UI.brand, fontSize: 10, fontWeight: '800', letterSpacing: 0.4, textTransform: 'uppercase' },
+  demoName: { color: UI.text, fontSize: 15, fontWeight: '800', flex: 1 },
+  demoSub: { color: UI.textDim, fontSize: 12.5, lineHeight: 17 },
+  demoBottom: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  face: { width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, backgroundColor: UI.bg },
+  facepile: { flexDirection: 'row', flex: 1 },
+  demoGo: { color: UI.brand, fontSize: 13, fontWeight: '700' },
   archives: { paddingHorizontal: 14 },
   archiveRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 11 },
   archiveRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.1)' },

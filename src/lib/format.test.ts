@@ -1,4 +1,4 @@
-import { compassDir, formatDistance, formatEtaClock, formatLevel, statusLine, timeAgo } from './format';
+import { compassDir, formatDistance, formatEtaClock, formatEtaCoarse, formatLevel, statusLine, timeAgo } from './format';
 
 describe('formatEtaClock', () => {
   it('renders minutes:seconds', () => {
@@ -92,5 +92,22 @@ describe('statusLine', () => {
     expect(statusLine({ state: 'walking', left: true, remainingM: 800, mode: 'foot', steps: 1200 })).toBe(
       'Left — last known position'
     );
+  });
+});
+
+describe('formatEtaCoarse (map tags — must change rarely)', () => {
+  it('rounds to whole minutes so the puck view stops re-rendering', () => {
+    expect(formatEtaCoarse(12.4)).toBe('12m');
+    expect(formatEtaCoarse(12.6)).toBe('13m');
+  });
+  it('says now under half a minute', () => {
+    expect(formatEtaCoarse(0.4)).toBe('now');
+  });
+  it('hours past 60 minutes, days past a day', () => {
+    expect(formatEtaCoarse(75)).toBe('1h 15m');
+    expect(formatEtaCoarse(5.1 * 24 * 60)).toBe('5.1 days');
+  });
+  it('never goes negative', () => {
+    expect(formatEtaCoarse(-9)).toBe('now');
   });
 });

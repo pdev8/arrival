@@ -70,9 +70,57 @@ Apple Maps loses custom marker views on ANY lifecycle event** — opacity flip,
 mount, unmount, or key-change remount (rn-maps #5911). Every "fix" that just
 moved the churn around failed on device. What actually works:
 
-- **Zero lifecycle churn in live sessions.** No clustering there: each puck
-  mounts once at roster load and never unmounts, hides, or remounts. Facepiles
-  are demo-only (simulated members, never dropped).
+- **Zero lifecycle churn, in BOTH sources.** No clustering anywhere in the
+  session: each puck mounts once and never unmounts, hides, or remounts.
+  Facepiles are SHELVED (they were demo-only for a while — then tracking a
+  member dropped pucks there too: the follow camera shifts the zoom
+  threshold, groups re-form, members unmount). `lib/clusters` and its tests
+  survive for the eventual revival and still serve the archive's static
+  layout; `useClusters`/`ClusterMarker` are deleted. Bring facepiles back only
+  after #5911 is fixed and the dev-build soak (roadmap T2) proves it.
+- **A marker's custom view must be STATIC.** Any change to it makes Apple Maps
+  rebuild the native view — you see its default pin flash ("a big bright dot
+  splatter") and, when the rebuild fails, the puck is gone for good. So:
+  `<Marker>` takes the live coordinate, but its child is a separately memoized
+  `<Puck>` that never sees position. Everything the puck draws is quantized to
+  change rarely — heading to 5°, ETA to whole MINUTES (`formatEtaCoarse`; the
+  rail and card carry the live m:ss countdown). **Selection must not restyle
+  the puck** (it used to thicken the border — that was the swipe flash); it
+  only bumps zIndex, a cheap native prop. The camera flying to a member and
+  their open card already say who's selected.
+- **Trails toggle by COLOR, never by mounting.** Polylines stay mounted and go
+  `transparent` when hidden. Unmounting them rebuilt hundreds of points on
+  every toggle (slow to reappear) and churned the child list under the markers.
+- **NEVER CHANGE MAPVIEW'S CHILD LIST AT RUNTIME.** This is the big one, dug
+  out of the vendored rn-maps source. `AIRMap` does not override
+  `didUpdateReactSubviews`, so it inherits RN's default (UIView+React.m), which
+  calls `addSubview()` on **every** child — and `AIRMap.addSubview:` remaps a
+  marker to `addAnnotation:`. Therefore mounting or unmounting a SINGLE child
+  (one trail polyline!) re-adds **every member's annotation**, re-running
+  `mapView:viewForAnnotation:`. If that query lands in a pass where a marker's
+  react children aren't attached, `shouldUsePinView` is true and rn-maps
+  returns an **MKMarkerAnnotationView** — a big coloured balloon (the "dot
+  splatter"), or the puck simply vanishes. Mount every marker and every
+  polyline once, for the life of the session, and drive visibility by DATA.
+- **Polyline visibility = coordinates, never strokeColor.** In
+  `AIRMapPolyline.m` the `MKPolylineRenderer` is created in exactly one place —
+  `setCoordinates:` — and nothing in the Apple provider ever calls
+  `setNeedsDisplay`. A `strokeColor` change mutates an already-rasterized
+  renderer and does not redraw. Hidden polylines therefore carry `[]`
+  coordinates; visible ones carry their points. (This is why a strokeColor
+  toggle appeared to work for exactly the members who happened to be moving.)
+- **Trails must have a LIVE HEAD.** The settled body can be memoized on a
+  distance bucket, but the last polyline is redrawn to the member's current
+  position (`headSegment` in lib/trail) — otherwise the trail freezes for
+  `bucket / speed` seconds at a time (20 m ÷ 1.4 m/s ≈ 14 s: "the trail goes
+  cold").
+- **Marker CHILD ORDER is load-bearing.** Member markers render FIRST in
+  MapView's children; nothing may mount above them. Anything inserted ahead of
+  a marker shifts its index, rn-maps re-reconciles the annotations, and the
+  views are dropped — that's how the Trails toggle wiped every puck. TrailPaths
+  render LAST and stay permanently mounted (hidden ones return null), so the
+  toggle never changes the child list. Overlays draw beneath markers regardless
+  of child order, so this costs nothing visually.
 - **Stable keys. Never remount as a "self-heal."** A `-sel` key suffix was
   added to repaint markers across selection — it caused a 90%-reproducible
   blink on every Close, because a freshly inserted marker doesn't paint until

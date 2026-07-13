@@ -4,7 +4,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { formatEtaClock, formatLevel } from '../lib/format';
+import { formatEtaCoarse, formatLevel } from '../lib/format';
 
 interface Props {
   member: SimMember;
@@ -25,10 +25,23 @@ interface Props {
  * lead of a pencil, so the color leads the photo without tinting it. Idle
  * members relax back to a plain circle. The photo counter-rotates upright.
  *
- * Memoized on rendered-visible state (position, ~1° heading, per-second ETA,
- * state/level/selection) so idle and arrived pucks skip the 4 Hz tick
- * entirely. onPress identity is deliberately ignored — handlers close over
- * nothing mutable.
+ * THE CHURN RULE (why this file is split in two):
+ * A moving member's coordinate changes 4x/second. That MUST reach the native
+ * annotation — it's how the puck moves — but it must NOT re-render the custom
+ * child view, because churning a custom marker view is exactly what makes
+ * Apple Maps + New Arch drop it (#5911), and a dropped view never comes back.
+ * So <Marker> takes the live coordinate while its child is a separately
+ * memoized <Puck> that knows nothing about position. Walking a member now
+ * re-renders zero child views. Everything the puck DOES draw is quantized to
+ * change rarely: heading to 5°, ETA to whole minutes (formatEtaCoarse — the
+ * rail and card carry the live countdown instead).
+ *
+ * SELECTION DOES NOT TOUCH THE PUCK. It used to thicken the border, which
+ * recreated the native view on every swipe — Apple Maps flashes its default
+ * pin ("a big bright dot") while a custom view is rebuilt, and when the
+ * rebuild fails the puck is simply gone. Selection is already unmistakable:
+ * the camera flies to them and their card is up. Don't add a selected style
+ * back here.
  */
 export const MemberMarker = React.memo(
   MemberMarkerInner,
@@ -37,20 +50,21 @@ export const MemberMarker = React.memo(
     prev.repaintTick === next.repaintTick &&
     Math.round(prev.mapHeading ?? 0) === Math.round(next.mapHeading ?? 0) &&
     prev.member.id === next.member.id &&
+    prev.member.pos.latitude === next.member.pos.latitude &&
+    prev.member.pos.longitude === next.member.pos.longitude &&
     prev.member.name === next.member.name &&
     prev.member.color === next.member.color &&
     prev.member.state === next.member.state &&
     prev.member.left === next.member.left &&
     prev.member.level === next.member.level &&
-    prev.member.pos.latitude === next.member.pos.latitude &&
-    prev.member.pos.longitude === next.member.pos.longitude &&
-    Math.round(prev.member.heading) === Math.round(next.member.heading) &&
-    Math.round(prev.member.etaMin * 60) === Math.round(next.member.etaMin * 60)
+    Math.round(prev.member.heading / 5) === Math.round(next.member.heading / 5) &&
+    Math.round(prev.member.etaMin) === Math.round(next.member.etaMin)
 );
 
 function MemberMarkerInner({ member, mapHeading = 0, selected, repaintTick: _repaintTick, onPress }: Props) {
   const moving = member.state === 'walking' || member.state === 'driving';
-  const rot = moving ? member.heading - mapHeading + 45 : 0;
+  // quantized so the child view's props change rarely, not every tick
+  const rot = moving ? Math.round((member.heading - mapHeading) / 5) * 5 + 45 : 0;
 
   return (
     <Marker
@@ -58,52 +72,89 @@ function MemberMarkerInner({ member, mapHeading = 0, selected, repaintTick: _rep
       anchor={{ x: 0.5, y: 0.4 }}
       onPress={onPress}
       tracksViewChanges
-      zIndex={member.isYou ? 20 : 10}
+      zIndex={selected ? 30 : member.isYou ? 20 : 10}
     >
-      <View style={[styles.wrap, member.left && styles.leftDim]}>
+      <Puck
+        name={member.name}
+        color={member.color}
+        avatar={member.avatar}
+        state={member.state}
+        level={member.level}
+        left={!!member.left}
+        etaMin={member.etaMin}
+        rot={rot}
+        moving={moving}
+      />
+    </Marker>
+  );
+}
+
+interface PuckProps {
+  name: string;
+  color: string;
+  avatar?: SimMember['avatar'];
+  state: SimMember['state'];
+  level: number | null;
+  left: boolean;
+  etaMin: number;
+  rot: number;
+  moving: boolean;
+}
+
+/**
+ * The marker's custom view. Knows NOTHING about position — that's the point:
+ * it must not re-render while a member walks. Memoized on the coarse values it
+ * actually draws, so its native view tree is created once and left alone.
+ */
+const Puck = React.memo(
+  function Puck({ name, color, avatar, state, level, left, etaMin, rot, moving }: PuckProps) {
+    const eta = left ? 'left' : state === 'arrived' ? 'here' : formatEtaCoarse(etaMin);
+    return (
+      <View style={[styles.wrap, left && styles.leftDim]}>
         <View style={[styles.holder, { transform: [{ rotate: `${rot}deg` }] }]}>
           {/* pencil lead: a mini teardrop nosing out past the drop's corner — softly
               rounded point outside, the rest hidden under the photo */}
-          {moving && <View style={[styles.tip, { backgroundColor: member.color }]} />}
+          {moving && <View style={[styles.tip, { backgroundColor: color }]} />}
           <View
-            style={[
-              styles.drop,
-              { borderColor: member.color },
-              !moving && styles.idle,
-              selected && styles.selected,
-            ]}
+            style={[styles.drop, { borderColor: color }, !moving && styles.idle]}
           >
-            {member.avatar ? (
+            {avatar ? (
               <Image
-                source={member.avatar}
+                source={avatar}
                 fadeDuration={0}
                 style={[styles.photo, { transform: [{ rotate: `${-rot}deg` }] }]}
               />
             ) : (
-              <View style={[styles.initialWrap, { backgroundColor: `${member.color}40`, transform: [{ rotate: `${-rot}deg` }] }]}>
-                <Text style={styles.initial}>{member.name[0]?.toUpperCase()}</Text>
+              <View style={[styles.initialWrap, { backgroundColor: `${color}40`, transform: [{ rotate: `${-rot}deg` }] }]}>
+                <Text style={styles.initial}>{name[0]?.toUpperCase()}</Text>
               </View>
             )}
           </View>
         </View>
         <View style={styles.tag}>
           {/* tag reads: name · time · level · pause */}
-          <Text style={styles.tagName}>{member.name}</Text>
-          <Text style={[styles.tagEta, member.left ? styles.tagLeft : { color: member.color }]}>
-            {member.left ? 'left' : member.state === 'arrived' ? 'here' : formatEtaClock(member.etaMin)}
-          </Text>
+          <Text style={styles.tagName}>{name}</Text>
+          <Text style={[styles.tagEta, left ? styles.tagLeft : { color }]}>{eta}</Text>
           {/* off street level: B1 / F2 chip so verticality reads on the map */}
-          {!member.left && member.level != null && (
-            <Text style={styles.tagLevel}>{formatLevel(member.level)}</Text>
-          )}
-          {!member.left && member.state === 'stopped' && (
-            <MaterialCommunityIcons name="pause" size={10} color={member.color} />
+          {!left && level != null && <Text style={styles.tagLevel}>{formatLevel(level)}</Text>}
+          {!left && state === 'stopped' && (
+            <MaterialCommunityIcons name="pause" size={10} color={color} />
           )}
         </View>
       </View>
-    </Marker>
-  );
-}
+    );
+  },
+  (p, n) =>
+    p.name === n.name &&
+    p.color === n.color &&
+    p.avatar === n.avatar &&
+    p.state === n.state &&
+    p.level === n.level &&
+    p.left === n.left &&
+    p.rot === n.rot &&
+    p.moving === n.moving &&
+    Math.round(p.etaMin) === Math.round(n.etaMin)
+);
 
 const SIZE = 44;
 const R = SIZE / 2;
@@ -137,7 +188,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   idle: { borderTopLeftRadius: R },
-  selected: { borderWidth: 3.5 },
   photo: { width: PHOTO, height: PHOTO },
   initialWrap: { width: PHOTO, height: PHOTO, alignItems: 'center', justifyContent: 'center' },
   initial: { color: UI.text, fontSize: 19, fontWeight: '800' },
