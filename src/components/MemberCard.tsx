@@ -1,9 +1,10 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SimMember } from '../demo/simulation';
+import { SessionStop, SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { compassDir, formatDistance, formatLevel, headlineLabel, headlineTone, memberHeadline, statusLine } from '../lib/format';
+import { compassDir, formatDistance, formatLevel, headlineLabel, headlineTone, isProgressing, memberHeadline, statusLine } from '../lib/format';
+import { canJoin } from '../lib/stops';
 import { toneColor } from '../lib/tone';
 import { bearingDeg, distanceM } from '../lib/geo';
 import { STATE_ICON } from '../lib/icons';
@@ -17,7 +18,12 @@ interface Props {
   member: SimMember;
   /** you, for the "0.4 mi NE of you" line (undefined when member IS you) */
   you?: SimMember;
-  onRetrace: () => void;
+  /** the stop they're at or committed to — what you'd be joining */
+  stop: SessionStop | null;
+  /** somewhere to actually navigate to (false on your own card in free roam) */
+  canNavigate: boolean;
+  onJoin: () => void;
+  onNavigate: () => void;
   onClose: () => void;
 }
 
@@ -27,9 +33,16 @@ interface Props {
  * replaces — so selecting/closing never shifts the layout, and no member
  * state (departed, arrived, long name) changes the footprint: every text
  * line truncates instead of wrapping.
+ *
+ * THE ACTIONS ARE LIVE ACTIONS. This card used to lead with "Retrace steps",
+ * which is a thing you want when a session is OVER — and the archive already
+ * does it properly, with an animated replay. Mid-session, retracing someone is
+ * idle curiosity; what you actually want is to act on where they are right now.
+ * So: JOIN them at the stop they've pulled over at, or NAVIGATE to them.
  */
-function MemberCardInner({ member, you, onRetrace, onClose }: Props) {
+function MemberCardInner({ member, you, stop, canNavigate, onJoin, onNavigate, onClose }: Props) {
   const arrived = member.state === 'arrived';
+  const joinable = canJoin(stop);
 
   const relative =
     you && you.id !== member.id
@@ -48,6 +61,7 @@ function MemberCardInner({ member, you, onRetrace, onClose }: Props) {
           color={member.color}
           arrived={arrived}
           count={16}
+          pulse={isProgressing(member)}
         />
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={1}>
@@ -81,17 +95,49 @@ function MemberCardInner({ member, you, onRetrace, onClose }: Props) {
           )}
         </View>
       </View>
+      {/* Both buttons are ALWAYS rendered, disabled rather than removed. The
+          card's height is fixed by contract and the deck is a pager — a button
+          that comes and goes would make every page a different shape. A dimmed
+          "Join" also teaches the affordance: it lights up the moment someone
+          pulls over. */}
       <View style={styles.actions}>
-        <Pressable style={styles.actionPrimary} onPress={onRetrace}>
-          <MaterialCommunityIcons name="map-marker-path" size={13} color={UI.bg} />
-          <Text style={styles.actionPrimaryText}>Retrace steps</Text>
+        <Pressable
+          style={[styles.actionPrimary, !joinable && styles.actionOff]}
+          disabled={!joinable}
+          onPress={onJoin}
+        >
+          <MaterialCommunityIcons name="account-multiple-plus" size={13} color={UI.bg} />
+          <Text style={styles.actionPrimaryText} numberOfLines={1}>
+            {joinLabel(member, stop)}
+          </Text>
         </Pressable>
+
+        <Pressable
+          style={[styles.actionSecondary, !canNavigate && styles.actionOff]}
+          disabled={!canNavigate}
+          onPress={onNavigate}
+        >
+          <MaterialCommunityIcons name="navigation-variant-outline" size={13} color={UI.text} />
+          <Text style={styles.actionSecondaryText}>Navigate</Text>
+        </Pressable>
+
         <Pressable style={styles.actionGhost} onPress={onClose}>
           <Text style={styles.actionGhostText}>Close</Text>
         </Pressable>
       </View>
     </Glass>
   );
+}
+
+/**
+ * What the Join button says. Naming the place is the whole point — "Join" is a
+ * shrug, "Join at Joe's Pizza" is a decision you can make without looking
+ * anywhere else.
+ */
+function joinLabel(member: SimMember, stop: SessionStop | null): string {
+  if (!stop) return 'Join';
+  if (!canJoin(stop)) return member.isYou ? 'Your stop' : 'Joined';
+  return `Join at ${stop.name}`;
 }
 
 /**
@@ -119,6 +165,14 @@ export const MemberCard = React.memo(
     Math.round(prev.member.slackMin ?? Infinity) === Math.round(next.member.slackMin ?? Infinity) &&
     Math.round(prev.member.traveledM / 10) === Math.round(next.member.traveledM / 10) &&
     filledDots(prev.member.progress, 16) === filledDots(next.member.progress, 16) &&
+    // the ring breathes only while they're closing the gap — a stopped member's
+    // ring must actually stop
+    isProgressing(prev.member) === isProgressing(next.member) &&
+    // the Join button's whole existence turns on this: which stop, and whether
+    // I'm already in it
+    prev.stop?.id === next.stop?.id &&
+    prev.stop?.participants.length === next.stop?.participants.length &&
+    prev.canNavigate === next.canNavigate &&
     prev.member.pos === next.member.pos &&
     prev.you?.pos === next.you?.pos
 );
@@ -149,7 +203,20 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     paddingVertical: 6,
   },
-  actionPrimaryText: { color: UI.bg, fontSize: 12.5, fontWeight: '700' },
+  actionPrimaryText: { color: UI.bg, fontSize: 12.5, fontWeight: '700', flexShrink: 1 },
+  actionSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    borderRadius: 11,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  actionSecondaryText: { color: UI.text, fontSize: 12.5, fontWeight: '600' },
+  /** disabled, not removed — the card's height is fixed and the deck is a pager */
+  actionOff: { opacity: 0.38 },
   actionGhost: {
     paddingHorizontal: 14,
     borderRadius: 11,

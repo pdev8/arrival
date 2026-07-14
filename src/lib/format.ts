@@ -65,6 +65,18 @@ export function headlineTone(m: Headline): HeadlineTone {
   return 'identity';
 }
 
+/**
+ * Is this member actively closing a gap right now?
+ *
+ * Drives the pulsing dot on the progress ring — the one that's about to fill.
+ * A stopped member has nothing in progress, an arrived one has nothing left, and
+ * FREE ROAM has no gap to close at all: a dot blinking toward a destination that
+ * doesn't exist would be promising something the session never agreed to.
+ */
+export function isProgressing(m: { moving: boolean; state: string; etaMin: number | null }): boolean {
+  return m.moving && m.state !== 'arrived' && m.etaMin != null;
+}
+
 /** what the headline number MEANS — the little label under it */
 export function headlineLabel(m: Pick<Headline, 'etaMin' | 'state' | 'slackMin'>): string {
   if (m.etaMin == null) return 'covered';

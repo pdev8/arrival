@@ -90,7 +90,10 @@ image markers are the only acceptable revival, and only after #5911 is fixed.
 ### 8. The Trails toggle is authoritative
 `visible = showTrails`. Selection must NOT force a trail on — the user then
 can't turn off the trail they're looking at, which reads as a broken toggle.
-Retrace turns the toggle on.
+**Nothing else may turn it on either.** (A live "Retrace" action used to; it's
+gone — retracing is what the *archive* is for, and it does it properly there,
+with an animated replay. The live member card's actions are Join and Navigate:
+things you can act on while the session is still running.)
 
 ### 9. Direction is COURSE OVER GROUND, and it is EARNED
 The puck's lean and its coloured tip mean **the way that person is travelling**

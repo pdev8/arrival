@@ -3,7 +3,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { headlineTone, memberHeadline } from '../lib/format';
+import { headlineTone, isProgressing, memberHeadline } from '../lib/format';
 import { toneColor } from '../lib/tone';
 import { AvatarRing } from './AvatarRing';
 import { filledDots } from './DotRing';
@@ -62,6 +62,7 @@ const RailChip = React.memo(
             progress={m.progress}
             color={m.color}
             arrived={arrived}
+            pulse={isProgressing(m)}
           />
           <Text style={styles.name} numberOfLines={1}>
             {m.name}

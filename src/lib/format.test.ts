@@ -1,4 +1,4 @@
-import { compassDir, formatDistance, formatEtaClock, formatEtaCoarse, formatLevel, headlineLabel, headlineTone, memberHeadline, statusLine, timeAgo } from './format';
+import { compassDir, formatDistance, formatEtaClock, formatEtaCoarse, formatLevel, headlineLabel, headlineTone, isProgressing, memberHeadline, statusLine, timeAgo } from './format';
 
 describe('formatEtaClock', () => {
   it('renders minutes:seconds', () => {
@@ -207,5 +207,22 @@ describe('headlineTone — only a real problem takes a member’s colour away', 
   it('arrival is good news; leaving is neither', () => {
     expect(headlineTone({ ...base, state: 'arrived' })).toBe('good');
     expect(headlineTone({ ...base, left: true, slackMin: -40 })).toBe('muted');
+  });
+});
+
+describe('isProgressing — should the ring’s next dot breathe?', () => {
+  const walking = { moving: true, state: 'walking', etaMin: 12 };
+
+  it('yes while they are closing the gap', () => {
+    expect(isProgressing(walking)).toBe(true);
+  });
+  it('no when they have stopped — a still ring is information too', () => {
+    expect(isProgressing({ ...walking, moving: false, state: 'stopped' })).toBe(false);
+  });
+  it('no once they are there — nothing left to earn', () => {
+    expect(isProgressing({ ...walking, state: 'arrived' })).toBe(false);
+  });
+  it('no in FREE ROAM — a dot blinking toward a destination that does not exist', () => {
+    expect(isProgressing({ ...walking, etaMin: null })).toBe(false);
   });
 });
