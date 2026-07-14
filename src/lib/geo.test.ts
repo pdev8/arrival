@@ -6,6 +6,7 @@ import {
   distanceM,
   isZoomedInside,
   lerp,
+  offsetM,
   pointAlongRoute,
   routeSlice,
 } from './geo';
@@ -144,5 +145,24 @@ describe('route helpers', () => {
     const slice = routeSlice(route, cum, 500, 100);
     expect(slice.length).toBe(2);
     expect(slice[0]).toEqual(slice[1]);
+  });
+});
+
+describe('offsetM', () => {
+  it('is the inverse of distanceM and bearingDeg — walk 100 m at 42°, end up 100 m away at 42°', () => {
+    const b = offsetM(A, 42, 100);
+    expect(distanceM(A, b)).toBeCloseTo(100, 0);
+    expect(bearingDeg(A, b)).toBeCloseTo(42, 0);
+  });
+
+  it('goes the right way round the compass', () => {
+    expect(offsetM(A, 0, 100).latitude).toBeGreaterThan(A.latitude); // north
+    expect(offsetM(A, 180, 100).latitude).toBeLessThan(A.latitude); // south
+    expect(offsetM(A, 90, 100).longitude).toBeGreaterThan(A.longitude); // east
+    expect(offsetM(A, 270, 100).longitude).toBeLessThan(A.longitude); // west
+  });
+
+  it('going nowhere leaves you where you were', () => {
+    expect(distanceM(A, offsetM(A, 123, 0))).toBeCloseTo(0, 5);
   });
 });

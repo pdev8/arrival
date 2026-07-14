@@ -8,9 +8,11 @@ import {
   pointAlongRoute,
   routeSlice,
 } from '../lib/geo';
+import { Fix, Motion, motionFrom, pushFix } from '../lib/motion';
 import { CATEGORY_EMOJI, LevelSpan, MemberSeed, Scenario, StopCategory } from './data';
 import { Stoplight, findLights } from './lights';
 import { Reactions, toggleReaction } from './reactions';
+import { sensedFix } from './sensor';
 
 /** simulation tick interval — 4 Hz keeps marker motion fluid */
 const TICK_MS = 250;
@@ -47,7 +49,23 @@ export interface SimMember {
   color: string;
   isYou: boolean;
   pos: LatLng;
-  heading: number;
+  /**
+   * Course over ground — the way they are TRAVELLING, never the way the phone
+   * points (see lib/motion). NULL when we haven't earned one: they've never
+   * moved, they've been still long enough that a stale course would be a lie,
+   * or the fixes are too vague to say. Null is not north. A null heading means
+   * the puck shows no direction at all.
+   */
+  heading: number | null;
+  /**
+   * Are they travelling *right now* — the sensor's answer, hysteretic.
+   *
+   * Deliberately separate from `state`, because the two are allowed to
+   * disagree: a walker stopped at a red light is socially still "walking" (the
+   * copy shouldn't shout STOPPED every block) but is not moving, so their arrow
+   * dims instead of pointing confidently down a street they aren't walking.
+   */
+  moving: boolean;
   state: MemberState;
   /** real-time minutes to destination — NULL in free roam (no destination):
    *  not "zero minutes away", but "there is nowhere to be". Every surface that
@@ -112,7 +130,27 @@ interface InternalMember {
   arrived: boolean;
   joinedScriptedStop: boolean;
   statusNote?: string;
+  /** what the demo's fake receiver has reported lately — see demo/sensor.ts */
+  fixes: Fix[];
+  motion: Motion;
+  /** sim-clock ms of the last synthesized fix, and its sequence number */
+  lastFixAt: number;
+  fixSeq: number;
 }
+
+/**
+ * The demo's members live on a clock that runs `timeScale` faster than ours:
+ * `elapsed` counts wall seconds while positions advance at
+ * `cruiseMps * timeScale`. Fixes are stamped in THEIR clock, so distance over
+ * time reproduces their true speed and the motion gate sees the same numbers a
+ * real receiver would.
+ */
+const simClockMs = (s: SimState) => s.elapsed * s.scenario.timeScale * 1000;
+
+/** one GPS reading a second, in the members' own clock */
+const FIX_INTERVAL_MS = 1000;
+/** how much walking history to invent for someone who joins mid-stride */
+const SEED_FIXES = 10;
 
 interface SimState {
   scenario: Scenario;
@@ -188,6 +226,11 @@ export function useSimulation(
       const lights =
         seed.cruiseMps < DRIVING_MPS && scenario.key !== 'mall' ? findLights(route, cum, seed.id) : [];
       const firstLight = lights.findIndex((l) => l.atM > startM);
+      // Everyone joins mid-stride, so invent the walk that got them here — a
+      // member who has been moving deserves an arrow on the first frame. Anyone
+      // who starts at the top of their route genuinely has no history, and
+      // correctly has no direction until they earn one.
+      const fixes = seedFixes(seed, route, cum, startM);
       members.set(seed.id, {
         seed,
         route,
@@ -201,6 +244,10 @@ export function useSimulation(
         nextLight: firstLight === -1 ? lights.length : firstLight,
         arrived: false,
         joinedScriptedStop: false,
+        fixes,
+        motion: motionFrom(fixes, null, 0),
+        lastFixAt: 0,
+        fixSeq: 0,
       });
       stopPoiAtM.set(seed.id, distanceAlongRoute(route, cum, scenario.stopEvent.poi.pos));
     }
@@ -234,7 +281,6 @@ export function useSimulation(
       publish();
     }, ms);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running, publish, snapshot.allArrived]);
 
   const vote = useCallback(
@@ -476,6 +522,50 @@ function tick(s: SimState, dtSec: number) {
       }
     }
   }
+
+  // THE RECEIVER. Every member — including the ones who have arrived and the
+  // ones standing at a light — gets a noisy fix once a second and runs it
+  // through the same gate a real phone does. Arrived members must be in here
+  // too, or their last course would hang around forever instead of decaying.
+  const now = simClockMs(s);
+  for (const m of s.members.values()) {
+    if (now - m.lastFixAt < FIX_INTERVAL_MS) continue;
+    m.lastFixAt = now;
+    m.fixSeq++;
+    const standingStill = m.arrived || m.stopUntil !== null || m.waitUntil !== null;
+    const { pos } = pointAlongRoute(m.route, m.cum, m.progressM);
+    const course = headingAlongRoute(m.route, m.cum, m.progressM, lookAheadM(m.seed));
+    const fix = sensedFix(
+      m.seed.id,
+      m.fixSeq,
+      pos,
+      course,
+      standingStill ? 0 : m.seed.cruiseMps,
+      now
+    );
+    m.fixes = pushFix(m.fixes, fix);
+    m.motion = motionFrom(m.fixes, m.motion, now);
+  }
+}
+
+/** look-ahead window scaled to speed, so the arrow sweeps through turns */
+const lookAheadM = (seed: MemberSeed) => Math.max(8, seed.cruiseMps * 6);
+
+/**
+ * The walk that got them to their start line. Real fixes, lightly dirtied —
+ * enough history for the gate to hand them a direction immediately, rather than
+ * making every member start the demo as a directionless circle for ten seconds.
+ */
+function seedFixes(seed: MemberSeed, route: LatLng[], cum: number[], startM: number): Fix[] {
+  const fixes: Fix[] = [];
+  for (let k = SEED_FIXES; k >= 1; k--) {
+    const atM = startM - seed.cruiseMps * k;
+    if (atM < 0) continue;
+    const { pos } = pointAlongRoute(route, cum, atM);
+    const course = headingAlongRoute(route, cum, atM, lookAheadM(seed));
+    fixes.push(sensedFix(seed.id, -k, pos, course, seed.cruiseMps, -k * FIX_INTERVAL_MS));
+  }
+  return fixes;
 }
 
 function memberName(s: SimState, id: string): string {
@@ -517,10 +607,10 @@ function buildSnapshot(s: SimState): {
 } {
   const members: SimMember[] = [];
   for (const m of s.members.values()) {
+    // The RENDERED position is the clean one — the noise lives in the fixes we
+    // hand the gate (demo/sensor.ts), not in where the puck is drawn. Direction
+    // is what we're making honest here; position smoothing is its own problem.
     const { pos } = pointAlongRoute(m.route, m.cum, m.progressM);
-    // look-ahead window scaled to speed: the arrow sweeps through turns
-    const lookM = Math.max(8, m.seed.cruiseMps * 6);
-    const heading = headingAlongRoute(m.route, m.cum, m.progressM, lookM);
     const remainingM = Math.max(0, m.totalM - m.progressM);
     const mode: 'foot' | 'car' = m.seed.cruiseMps >= DRIVING_MPS ? 'car' : 'foot';
     const moving: MemberState = mode === 'car' ? 'driving' : 'walking';
@@ -535,7 +625,8 @@ function buildSnapshot(s: SimState): {
       color: m.seed.color,
       isYou: m.seed.isYou,
       pos,
-      heading,
+      heading: m.motion.heading,
+      moving: m.motion.moving,
       state: m.arrived ? 'arrived' : m.stopUntil !== null ? 'stopped' : moving,
       etaMin: remainingM / m.seed.cruiseMps / 60 + stopDelayMin,
       remainingM,

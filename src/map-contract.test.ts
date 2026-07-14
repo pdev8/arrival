@@ -138,6 +138,55 @@ describe('map contract: the marker’s custom view is static', () => {
     // the live m:ss clock belongs to the rail and the card, never the map
     expect(markerCode).not.toMatch(/formatEtaClock/);
   });
+
+  it('the direction tip is ALWAYS MOUNTED, hidden with opacity', () => {
+    // It used to be `{moving && <View style={styles.tip} />}`, which survived
+    // only because `moving` almost never changed. The motion gate makes it
+    // change for real — and adding/removing a subview of a live annotation view
+    // is the churn that drops pucks. Hide it, never unmount it.
+    expect(markerCode).not.toMatch(/\{\s*(moving|known)\s*&&\s*</);
+    expect(markerCode).toMatch(/styles\.tip[\s\S]{0,80}opacity:/);
+  });
+});
+
+describe('map contract: direction is course over ground, and it is earned', () => {
+  const sim = read('src/demo/simulation.ts');
+  const motion = read('src/lib/motion.ts');
+
+  it('a heading can be NULL — because "we don’t know" is not "due north"', () => {
+    // a non-nullable heading forces a default, the default is 0, and 0 is a
+    // confident arrow pointing north on a member who has never moved
+    expect(sim).toMatch(/heading:\s*number\s*\|\s*null/);
+  });
+
+  it('the puck shows nothing when there is no honest course to show', () => {
+    expect(markerCode).toMatch(/member\.heading\s*!=\s*null/);
+  });
+
+  it('never reads the compass — a phone in a back pocket points at its owner', () => {
+    // watchHeadingAsync is the magnetometer: where the DEVICE faces. Course over
+    // ground (watchPositionAsync → coords.heading) is where the BODY is going,
+    // and it is the same number in a pocket, a bag or a hand.
+    // comments stripped: these files TALK about the compass at length, to say
+    // we don't read it. The rule is about what the code does.
+    const src = ['src/live/useLiveTrip.ts', 'src/live/live-helpers.ts', 'src/lib/motion.ts']
+      .map((p) => code(read(p)))
+      .join('\n');
+    expect(src).not.toMatch(/watchHeadingAsync|magHeading|trueHeading|Magnetometer/);
+  });
+
+  it('has hysteresis — one threshold chatters, and every flip churns the marker', () => {
+    expect(motion).toMatch(/START_MPS/);
+    expect(motion).toMatch(/STOP_MPS/);
+    const start = Number(motion.match(/START_MPS\s*=\s*([\d.]+)/)?.[1]);
+    const stop = Number(motion.match(/STOP_MPS\s*=\s*([\d.]+)/)?.[1]);
+    expect(start).toBeGreaterThan(stop); // the GAP is the whole mechanism
+  });
+
+  it('averages bearings circularly — 350° and 10° are 20° apart, not 340°', () => {
+    expect(motion).toMatch(/Math\.atan2/);
+    expect(motion).not.toMatch(/degs\.reduce\([^)]*\)\s*\/\s*degs\.length/);
+  });
 });
 
 describe('map contract: the camera never re-applies zoom on the tick', () => {

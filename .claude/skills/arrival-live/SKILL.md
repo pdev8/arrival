@@ -39,6 +39,29 @@ only when it's all we have or newer than the last applied broadcast
 (`lastAt`). Broadcasts always win (`applyBroadcast`). Arrival latches. These
 are pure and tested — keep new merge rules there, not in the hook.
 
+## The sensors lie, and they lie in specific ways
+
+- **`coords.speed` and `coords.heading` are `-1`, not null, when iOS can't
+  determine them.** `-1` sails straight through a `!= null` check and becomes a
+  real-looking speed of minus one metre per second. Normalize at the edge:
+  `sensed()` in `lib/motion`.
+- **`coords.heading` (from `watchPositionAsync`) is COURSE OVER GROUND** — the
+  direction of travel. That is the only direction worth showing, because a phone
+  in a pocket or a bag has no meaningful *facing*. **Never call
+  `watchHeadingAsync`** — that's the magnetometer, and it answers a question
+  nobody asked. Enforced by `src/map-contract.test.ts`.
+- **We ship raw readings on the wire and gate them on the receiver**
+  (`PosWire`: `lat, lng, heading, speed, acc`). Everyone then judges everyone by
+  the same rule, instead of trusting whatever filtering the sender's OS applied.
+  The gate is `lib/motion`; see invariant 9 of `arrival-map`.
+- **A snapshot's `last_updated_at` is on the Postgres clock; a broadcast arrives
+  on yours.** Never mix them in a series you divide distances by — you'd invent
+  speeds out of clock skew. Fixes are stamped with the *receiver's* clock.
+- **A member who goes quiet must lose their direction.** The gate runs on every
+  merge, not just on new fixes, so stale fixes age out of the window and the held
+  course decays. A puck still pointing north-east on the strength of a fix from
+  four minutes ago is the exact lie this layer exists to prevent.
+
 ## Departure semantics — members never vanish
 
 - Leaving **marks** `left_at` (+ `sharing_enabled: false`); it NEVER deletes
