@@ -1,11 +1,19 @@
 import { LatLng, distanceM } from '../lib/geo';
+import { Fix, Motion, STILL, motionFrom, pushFix, sensed } from '../lib/motion';
 import { MemberState } from '../demo/simulation';
 
-/** SPEC §5.3 thresholds: driving > ~6 m/s, walking 0.5–6, stopped below. */
-export function stateFromSpeed(speedMps: number | null, arrived: boolean): MemberState {
+/**
+ * SPEC §5.3 thresholds, but the walking/stopped line is drawn by the motion
+ * gate (lib/motion), not by a bare speed comparison. That matters: a single
+ * threshold on raw GPS speed flips several times a minute at a crosswalk, and
+ * every flip re-renders the marker's custom view — which is how Apple Maps
+ * loses pucks. The gate's hysteresis is what makes this state stable enough to
+ * put on the map.
+ */
+export function stateFromMotion(m: Motion, arrived: boolean): MemberState {
   if (arrived) return 'arrived';
-  if (speedMps == null || speedMps < 0.5) return 'stopped';
-  return speedMps > 6 ? 'driving' : 'walking';
+  if (!m.moving) return 'stopped';
+  return m.speedMps > 6 ? 'driving' : 'walking';
 }
 
 /** Straight-line ETA fallback (SPEC D5) until the Routes API lands (C5). */
@@ -36,8 +44,14 @@ export const STRIDE_M = 0.75;
 /** The motion state tracked per live member (identity fields live upstream). */
 export interface Tracked {
   pos: LatLng | null;
-  heading: number;
-  speed: number | null;
+  /**
+   * What the gate makes of their recent fixes. Direction and speed live HERE
+   * and nowhere else — there is no raw `heading` field to accidentally default
+   * to 0, which is due north, which is a lie about someone who has never moved.
+   */
+  motion: Motion;
+  /** their recent fixes, stamped on OUR clock — the gate's only input */
+  fixes: Fix[];
   trail: LatLng[];
   /** remaining distance at first fix — the denominator for progress */
   firstRemainingM: number | null;
@@ -45,6 +59,16 @@ export interface Tracked {
   /** ms epoch of the freshest applied update (broadcast or snapshot) */
   lastAt: number;
 }
+
+export const blankTracked = (): Tracked => ({
+  pos: null,
+  motion: STILL,
+  fixes: [],
+  trail: [],
+  firstRemainingM: null,
+  arrived: false,
+  lastAt: 0,
+});
 
 export interface Snapshot {
   pos: LatLng | null;
@@ -62,20 +86,41 @@ export interface Snapshot {
  * broadcast; otherwise live state stands. (This rule is why a host who
  * missed the join broadcast still sees the joiner: the 10s snapshot lands
  * and outranks nothing.) Arrival latches — once arrived, always arrived.
+ *
+ * The gate runs on EVERY call, snapshot used or not, because a member who has
+ * gone quiet has to lose their direction: their fixes age out of the window and
+ * the held course decays. A puck that keeps pointing somewhere on the strength
+ * of a fix from four minutes ago is the exact lie we're here to prevent.
  */
 export function mergeSnapshot(
   existing: Tracked | undefined,
   snap: Snapshot,
   /** null = free roam: nowhere to arrive, nothing to measure against */
   destPos: LatLng | null,
-  arriveRadiusM: number
+  arriveRadiusM: number,
+  now: number
 ): Tracked {
   const useSnap = !!snap.pos && (!existing?.pos || snap.at > (existing?.lastAt ?? 0));
   const pos = useSnap ? snap.pos : (existing?.pos ?? null);
+
+  // Snapshot fixes are stamped with OUR clock, not `last_updated_at` — that
+  // timestamp comes off the Postgres server, and mixing two clocks in a series
+  // we divide distances by would invent speeds out of nothing.
+  const fixes =
+    useSnap && snap.pos
+      ? pushFix(existing?.fixes ?? [], {
+          pos: snap.pos,
+          at: now,
+          speed: sensed(snap.speed),
+          course: sensed(snap.heading),
+          accuracy: null,
+        })
+      : (existing?.fixes ?? []);
+
   return {
     pos,
-    heading: useSnap ? (snap.heading ?? existing?.heading ?? 0) : (existing?.heading ?? snap.heading ?? 0),
-    speed: useSnap ? (snap.speed ?? null) : (existing?.speed ?? snap.speed ?? null),
+    fixes,
+    motion: motionFrom(fixes, existing?.motion ?? null, now),
     trail: useSnap && snap.pos ? appendToTrail(existing?.trail ?? [], snap.pos) : (existing?.trail ?? []),
     firstRemainingM: existing?.firstRemainingM ?? (pos && destPos ? distanceM(pos, destPos) : null),
     arrived:
@@ -86,21 +131,41 @@ export function mergeSnapshot(
   };
 }
 
+/** What one member's position broadcast carries. `heading` is COURSE OVER
+ *  GROUND as the sender's OS reported it — raw, un-gated, possibly nonsense.
+ *  Every receiver gates it themselves, so everyone judges everyone by the same
+ *  rule and no one has to trust the sender's filtering. */
+export interface PosWire {
+  lat: number;
+  lng: number;
+  heading: number | null;
+  speed: number | null;
+  /** horizontal accuracy in metres. Absent from older clients — then unknown. */
+  acc?: number | null;
+}
+
 /** A live position broadcast applied to tracked motion. Broadcasts are the
  *  freshest source by definition, so they always win. */
 export function applyBroadcast(
   m: Tracked,
-  p: { lat: number; lng: number; heading: number | null; speed: number | null },
+  p: PosWire,
   /** null = free roam */
   destPos: LatLng | null,
   arriveRadiusM: number,
   now: number
 ): Tracked {
   const pos = { latitude: p.lat, longitude: p.lng };
+  const fixes = pushFix(m.fixes, {
+    pos,
+    at: now,
+    speed: sensed(p.speed),
+    course: sensed(p.heading),
+    accuracy: sensed(p.acc),
+  });
   return {
     pos,
-    heading: p.heading ?? m.heading,
-    speed: p.speed,
+    fixes,
+    motion: motionFrom(fixes, m.motion, now),
     trail: appendToTrail(m.trail, pos),
     firstRemainingM: m.firstRemainingM ?? (destPos ? distanceM(pos, destPos) : null),
     arrived: m.arrived || (!!destPos && distanceM(pos, destPos) <= arriveRadiusM),
@@ -109,32 +174,41 @@ export function applyBroadcast(
 }
 
 /**
- * Tracked motion → the Simulation-shape fields the UI reads (state, mode,
- * eta, steps, progress). Requires a position — callers filter posless
- * members out before mapping.
+ * Tracked motion → the Simulation-shape fields the UI reads (heading, moving,
+ * state, mode, eta, steps, progress). Requires a position — callers filter
+ * posless members out before mapping.
  */
 export function simMotion(m: Tracked, destPos: LatLng | null) {
   const pos = m.pos!;
   const traveledM = trailDistanceM(m.trail);
-  const state = stateFromSpeed(m.speed, m.arrived);
+  const state = stateFromMotion(m.motion, m.arrived);
   const mode = state === 'driving' ? ('car' as const) : ('foot' as const);
   const steps = mode === 'foot' ? Math.round(traveledM / STRIDE_M) : 0;
+  // null heading reaches the UI as null. It is not 0, and 0 is not "unknown" —
+  // it is due north, and a puck that confidently points north is worse than a
+  // puck that admits it doesn't know.
+  const heading = m.motion.heading;
+  const moving = m.motion.moving;
 
   // FREE ROAM: nowhere to be. Distance-to-go, ETA and progress are not "zero",
   // they're meaningless — the UI reads etaMin == null and shows what the
   // session IS about instead: distance covered and steps.
   if (!destPos) {
-    return { state, mode, remainingM: 0, traveledM, etaMin: null, steps, progress: 0 };
+    return { heading, moving, state, mode, remainingM: 0, traveledM, etaMin: null, steps, progress: 0 };
   }
 
   const remainingM = Math.max(0, distanceM(pos, destPos));
   const first = m.firstRemainingM ?? remainingM;
   return {
+    heading,
+    moving,
     state,
     mode,
     remainingM,
     traveledM,
-    etaMin: m.arrived ? 0 : straightLineEtaMin(pos, destPos, m.speed),
+    // the gate's smoothed speed, not the last raw fix — one bad sample used to
+    // swing the ETA by minutes
+    etaMin: m.arrived ? 0 : straightLineEtaMin(pos, destPos, moving ? m.motion.speedMps : null),
     steps,
     progress: first > 0 ? Math.min(1, 1 - remainingM / first) : 1,
   };

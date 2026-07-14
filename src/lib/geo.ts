@@ -36,6 +36,19 @@ export function bearingDeg(a: LatLng, b: LatLng): number {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
+/**
+ * The point `meters` away from `a` along `bearing` (deg, 0 = north).
+ * Equirectangular — exact enough at the scales a person walks, and the inverse
+ * of `bearingDeg`/`distanceM`, which is what tests and the demo's GPS
+ * stand-in need.
+ */
+export function offsetM(a: LatLng, bearing: number, meters: number): LatLng {
+  const br = toRad(bearing);
+  const dLat = (meters * Math.cos(br)) / R;
+  const dLng = (meters * Math.sin(br)) / (R * Math.cos(toRad(a.latitude)));
+  return { latitude: a.latitude + toDeg(dLat), longitude: a.longitude + toDeg(dLng) };
+}
+
 export function lerp(a: LatLng, b: LatLng, t: number): LatLng {
   return {
     latitude: a.latitude + (b.latitude - a.latitude) * t,

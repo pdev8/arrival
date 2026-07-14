@@ -1,6 +1,6 @@
 # Arrival project state
 
-Last reconciled: 2026-07-11 at `main` commit `b994e99` (merged PR #19).
+Last reconciled: 2026-07-13, `main` at `412d7ae` (PR #43 merged).
 
 This is the shared handoff for Claude, ChatGPT/Codex, and human contributors.
 Read it before choosing the next task; update it when a milestone boundary or
@@ -10,150 +10,156 @@ major architectural decision changes.
 
 Arrival is a temporary, session-scoped live map for groups traveling or
 meeting up. Members join with one link, share location only for the session's
-bounded lifetime, see the group converge, coordinate stops/suggestions, and
-hand navigation off to the device's maps app. It is a coordination layer, not
-a turn-by-turn navigator or persistent people tracker.
+bounded lifetime, see the group converge, coordinate stops, and hand navigation
+off to the device's maps app. It is a coordination layer, not a turn-by-turn
+navigator or a persistent people tracker.
+
+## Read these first — they are load-bearing
+
+| File | Why |
+|---|---|
+| `.claude/skills/arrival-map/SKILL.md` | **The map rendering contract.** Everything inside `<MapView>`. Enforced by `src/map-contract.test.ts` — if that test fails you broke the map, and you must not "fix" the test. |
+| `.claude/skills/arrival-live/SKILL.md` | The Supabase/GPS layer: realtime delivery, sensor lies, departure semantics, RLS rules. |
+| `.claude/skills/arrival-ui/SKILL.md` | Everything else on screen. |
+| `docs/ROADMAP.md` | What's shipped and what's next, per epic. Generated — edit `docs/roadmap.html` and run `node scripts/gen-roadmap.mjs`. |
+
+**Expo is SDK 54.** Read the exact versioned docs
+(https://docs.expo.dev/versions/v54.0.0/) before writing code.
+
+## The one thing that will waste your week
+
+**Marker bugs cannot be reproduced or validated in Expo Go.** Expo Go forces the
+New Architecture, where react-native-maps #5911 lives (Apple Maps drops custom
+marker views on any lifecycle event). Use a dev build with
+`newArchEnabled: false`:
+
+```
+npx expo run:ios --device      # build
+npx expo start --dev-client    # Metro, in the right mode
+```
+
+Two known build blockers, both already patched but both recurring after a clean
+install: RN 0.81's pinned `fmt` fails on Xcode 26 (`consteval`) → set
+`FMT_USE_CONSTEVAL 0` in `ios/Pods/fmt/include/fmt/base.h`; and `expo-font` must
+be a **direct** dependency (autolinking only links declared deps — Expo Go hides
+this).
 
 ## What works now
 
-### Demo path (polished and self-contained)
+### Demo path (polished, self-contained, no backend)
 
-- Three scenarios exist in code: NYC walking, Lake Tahoe road trip, and Hudson
-  Yards mall meetup. Create currently exposes mall and road trip; NYC is seeded
-  as a read-only archive.
-- Real/baked street routes, deterministic stoplight waits, scripted stops and
-  suggestions, voting, feed reactions, arrival detection, recap sharing, and
-  local AsyncStorage archives work without a backend.
-- Session UI uses the v2 architecture: group header, member rail, focused
-  member card/retrace, activity dock, trails, clustering, destination/stop
-  markers, and long-press place actions.
-- Vertical-awareness/floor values are simulated for the mall and selected
-  route spans.
+- Three scenarios: NYC walking (the showcase, with real photos — reachable from
+  the home screen), Lake Tahoe road trip, Hudson Yards mall meetup.
+- Baked OSRM street routes, deterministic stoplight waits, scripted stops and
+  suggestions, voting, feed reactions, arrival detection, recap sharing, local
+  AsyncStorage archives.
+- `demo/sensor.ts` synthesizes **noisy GPS** (speed jitter, `-1` course
+  dropouts, junk fixes) and runs it through the same motion gate live does — so
+  direction behaviour is testable on your desk. Positions are still rendered
+  clean; position smoothing is unsolved and out of scope.
 
-### Live path (Supabase-configured M1 slice)
+### Live path (Supabase)
 
-- Anonymous sign-in, server-side session creation, server-minted join codes,
-  join-by-code, membership cap/lock/expiry checks, and palette assignment.
-- Private Supabase Realtime channel per trip (`trip:{uuid}`), authorized by
-  `realtime.messages` RLS.
-- Foreground GPS publishes every 3 seconds; the user's last-known row is
-  snapshotted every 30 seconds. Roster joins and trip events arrive through
-  `postgres_changes`.
-- Live members adapt into the same `Simulation` interface as the demo, so the
-  session screen shares its UI. Straight-line ETA, local trails/steps, and a
-  40 m arrival threshold are present as interim behavior.
-- The local `.env` has all required Supabase variables set. Never print or
-  commit their values.
+- Anonymous sign-in, server-minted join codes, join-by-code, membership
+  cap/lock/expiry, palette assignment.
+- Private Realtime channel per trip (`trip:{uuid}`), authorized by
+  `realtime.messages` RLS. Positions broadcast every 3 s; `trip_members`
+  snapshot every 10 s; 15 s roster poll. **No single delivery path is trusted** —
+  see the live skill.
+- Free roam (a session with no destination), a destination any member can set
+  mid-session, and leave-not-end (leaving marks *your* `left_at`; the session
+  runs on and you can rejoin).
+- Live members adapt into the same `Simulation` shape as the demo, so the session
+  screen is backend-agnostic. Straight-line ETA, client-side trails/steps, 40 m
+  arrival threshold are interim.
+- `.env` holds the Supabase vars. Never print or commit them.
 
 ## Exact handoff point
 
-PR #19 (`B4 — Realtime positions`) is the latest merged work. There are no
-open GitHub issues or pull requests. Its PR description names **B6: live
-stops/votes/reactions** as the next intended slice.
+**Branch `feat/direction-earned` is checked out with uncommitted changes,
+awaiting Paul's device test.** It makes direction honest: `heading` becomes
+`number | null`, a motion gate (`src/lib/motion.ts`) decides whether a course has
+been *earned*, and the puck shows moving / paused / still. See roadmap **H3**.
 
-Live mode currently returns empty stops and placeholder actions that surface
-"Live stops & votes arrive with the next backend PR (B6)." The schema already
-contains `stops`, `stop_participants`, `stop_votes`, and `trip_events.reactions`.
-A sensible B6 implementation should preserve the `Simulation` adapter boundary,
-extract new business rules into pure tested helpers, subscribe to the relevant
-tables/events, and keep demo behavior unchanged when Supabase is unavailable.
+Two open items from the last merge:
 
-Background/adaptive tracking is also pending (called B5 in existing docs), as
-are universal/deferred invite links, real auth/profiles, Places/Routes APIs,
-push notifications, offline reconciliation, and store-readiness implementation.
-Do not infer the B5/B6 ordering from their labels; PR #19 explicitly chose B6
-next.
+1. **Migration `0005_free_roam.sql` is NOT applied to the live project.** Demo
+   mode works without it; a live session cannot set a destination until it is.
+   Needs Paul's explicit go.
+2. PR #43 (free roam / destination search / leave) was **merged untested**, at
+   Paul's call. PR #41 (stop-pin pool) likewise.
+
+Next planned slices, in order: **C8** (a meet time, so ETAs become early/late)
+then **C9** (secondary locations — personal stops that explain your ETA). Both
+are designed; see the roadmap.
 
 ## Architecture map
 
-- `app/`: Expo Router screens (`index` → `create` → `session`, plus archives).
-- `src/demo/`: scenario data, baked routes, deterministic simulation, reactions.
-- `src/live/`: live Supabase/GPS adapter shaped like the demo `Simulation`.
+- `app/`: Expo Router screens (`index` → `session`, plus archives).
+- `src/demo/`: scenario data, baked routes, deterministic simulation, and
+  `sensor.ts` — the demo's stand-in for a GPS receiver.
+- `src/live/`: Supabase/GPS adapter shaped like the demo `Simulation`.
 - `src/components/`: map annotations and the rail/card/dock session surfaces.
-- `src/lib/`: pure geometry, formatting, clustering, trails, recap, archive,
-  error, navigation, Supabase, and session helpers.
-- `supabase/migrations/`: schema/RLS/RPCs followed by realtime/name support.
-- `scripts/verify-backend.mjs`: hosted-backend acceptance checks.
-- `scripts/fetch-routes.mjs`: OSRM route regeneration (follow the
-  `regen-routes` skill when route inputs change).
+- `src/lib/`: pure logic — geometry, **motion** (the direction gate), formatting,
+  trails, places, convergence, roster, recap, archive, nav, Supabase.
+- `supabase/migrations/`: schema/RLS/RPCs. Append-only; CI applies every one to a
+  real Postgres.
+- `scripts/verify-backend.mjs`: hosted-backend acceptance checks (20).
+- `scripts/gen-roadmap.mjs`: regenerates `docs/ROADMAP.md` from `roadmap.html`.
+- `scripts/fetch-routes.mjs`: OSRM route regeneration (follow the `regen-routes`
+  skill when route inputs change).
 
-The live/demo seam is `Simulation` from `src/demo/simulation.ts`. Keeping that
-contract stable lets product UI remain backend-agnostic.
+The live/demo seam is `Simulation` in `src/demo/simulation.ts`. Keeping that
+contract stable is what lets product UI stay backend-agnostic.
 
 ## Non-negotiable implementation rules
 
-- Expo is SDK 54. Read the exact v54 docs before writing code.
-- Read `.agents/skills/arrival-ui/SKILL.md` before UI, map, marker, trail, or
-  animation changes.
-- Trails are native dotted/dashed `Polyline` overlays, never clouds of
-  `Marker` views. Dashes must not use `strokeColors`, and each segment keeps at
-  least three points.
-- Member photo markers stay mounted; clustering hides them with opacity.
-  Cluster regrouping remains throttled. Validate marker stability in a dev
-  build with New Architecture disabled, not Expo Go alone.
-- Member colors identify people; `UI.brand` amber identifies session/group
-  state. Non-map screens use `AmbientMap`; translucent panels use `Glass` with
-  `systemUltraThinMaterialDark`.
-- Camera modes are auto-fit, follow, and free. Panning/retrace must stop follow
-  so per-tick camera updates do not fight the user.
+- **The map contract is enforced, not advisory** — `src/map-contract.test.ts`.
+- **There is no clustering.** It was removed: mounting/unmounting members as
+  facepiles re-formed is what dropped pucks. Don't bring it back.
+- Trails are `Polyline` overlays, never clouds of `Marker`s. Visibility is driven
+  by `coordinates`, never `strokeColor` (a colour change doesn't redraw).
+- Direction means **course over ground**, never the compass. Never call
+  `watchHeadingAsync`.
+- Member colors identify people; `UI.brand` amber identifies session/group state.
+  Non-map screens use `AmbientMap`; translucent panels use `Glass`.
 - Put new logic in pure helpers and ship tests with every logic change.
-- Preserve the Supabase-off demo fallback and session-scoped privacy model.
+- Preserve the Supabase-off demo fallback and the session-scoped privacy model.
+- Migrations are append-only. Never edit an applied one.
 
 ## Verified baseline
 
-On 2026-07-11:
+On 2026-07-13, on `feat/direction-earned`:
 
-- `npm test -- --runInBand`: 16 suites, 114 tests passed.
+- `npx jest`: **24 suites, 291 tests passed.**
 - `npx tsc --noEmit`: passed.
-- `npm run lint`: passed with warnings only (existing hook dependency warnings
-  and one unused eslint-disable).
-- PR #19 reports the hosted backend verifier at 10/10, including a private
-  realtime round trip between two anonymous users.
+- `npm run lint`: passed (2 pre-existing hook-dependency warnings, both
+  deliberate).
 
-Before product work, run all three local checks again. For backend changes,
-also run `node scripts/verify-backend.mjs` when network access and the local
-Supabase environment are available.
+Run all three before any product work. For backend changes also run
+`node scripts/verify-backend.mjs`.
 
 ## Working-tree caution
 
-At this handoff, these untracked items exist and must not be accidentally
-committed as product source without review:
+Four Finder/cloud conflict duplicates are untracked and must never be committed
+(CI once applied a migration twice because of one):
 
-- `.agents/` (contains useful local skills; decide deliberately whether to
-  commit it).
-- `src/live/live-helpers 2.ts`
-- `src/live/live-helpers.test 2.ts`
-- `src/live/useLiveTrip 2.ts`
-- `supabase/migrations/0002_realtime_and_names 2.sql`
+```
+src/live/live-helpers 2.ts       src/live/useLiveTrip 2.ts
+src/live/live-helpers.test 2.ts  supabase/migrations/0002_realtime_and_names 2.sql
+```
 
-The four ` 2` files are byte-for-byte duplicates of their canonical files and
-look like Finder/cloud conflict copies. Leave or remove them only deliberately.
+**Never `git add -A` blind on a branch.**
 
-## Known documentation/product gaps
+## Known gaps
 
-- `SPEC.md` section 10 still describes the build as demo-only; code has advanced
-  into the M1 live slice. Treat this file plus current code and this handoff as
-  the combined truth until the spec is refreshed.
-- The create screen comment that says movement waits for B4 is stale; B4 is
-  merged.
-- Join-by-code is an iOS prompt; Android and universal/deferred link flows are
-  pending.
-- The header's remaining-time seed comes from route params rather than the live
-  trip's authoritative `ends_at`, and it does not itself drive a render timer.
-- Live arrival order/archives, stale-member UI, channel lifecycle on server-side
-  expiry, leaving/sharing controls, and real profile avatars are incomplete.
-
-## Suggested next task
-
-Implement B6 as a focused backend/UI-adapter slice:
-
-1. Define/test pure row-to-domain and vote/participant/reaction helpers.
-2. Load and subscribe to stops, participants, votes, and relevant events for
-   the active trip under existing RLS.
-3. Implement live announce/suggest/join/vote/react mutations without changing
-   demo behavior.
-4. Extend the backend verifier for two-member stop/vote/reaction round trips.
-5. Validate typecheck, lint, all unit tests, schema CI, and a two-device flow.
-
-Avoid mixing background tracking, universal links, or Places search into that
-same change unless the scope is explicitly revised.
+- `SPEC.md` §10 still describes the build as demo-only. Treat this file plus the
+  skills plus current code as the combined truth until the spec is refreshed.
+- Invite links are an iOS prompt; universal/deferred links are pending (**B3**).
+- Real auth and profile photos are pending (**A epic**); live members have no
+  avatar, only a colour initial.
+- ETAs are straight-line, not routed (**C6**).
+- Background tracking is not implemented (**B5**) — position updates stop when
+  the app is backgrounded.
+- Position smoothing is unsolved: a real puck will jitter with its GPS fix. Only
+  *direction* has been made honest so far.

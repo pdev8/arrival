@@ -92,6 +92,39 @@ image markers are the only acceptable revival, and only after #5911 is fixed.
 can't turn off the trail they're looking at, which reads as a broken toggle.
 Retrace turns the toggle on.
 
+### 9. Direction is COURSE OVER GROUND, and it is EARNED
+The puck's lean and its coloured tip mean **the way that person is travelling**
+— never the way their phone is pointing. A phone rides in a back pocket, a bag,
+a swinging hand; its compass (`watchHeadingAsync` → CLHeading) reports where the
+*device* faces, which in a pocket is its owner's backside. **Never subscribe to
+it.** We read course over ground (`watchPositionAsync` → `coords.heading` =
+`CLLocation.course`), which is the same number however the phone is carried,
+because the body carries the phone and the body is what moves.
+
+Course has one honest property a compass lacks: **when you stop, it ceases to
+exist** (iOS says so out loud — it reports `-1`, *not* null). So:
+
+- **`SimMember.heading` is `number | null`.** Null is not north and not zero.
+  A non-nullable heading forces a default, the default is `0`, and `0` is a
+  confident arrow pointing due north on someone who has never moved.
+- **`lib/motion` is the only gate**, and demo and live both go through it:
+  hysteretic speed thresholds (`START_MPS` > `STOP_MPS` — the *gap* is what
+  stops the flicker), a displacement floor so GPS wander can't fake motion,
+  circular averaging (350° and 10° average to **north**; a plain mean says 180°,
+  exactly backwards), and a 45 s hold across a pause before the course is
+  dropped.
+- **Three states, and the third is the point**: *moving* (lit tip) · *paused*
+  (dimmed — still know their course) · *still* (**no arrow at all**). The absence
+  is information: they are not going anywhere.
+- **The tip is ALWAYS MOUNTED, hidden with `opacity`.** It used to be a
+  conditional child (`moving && …`), which survived only because `moving` almost
+  never changed. The gate makes it change for real, and adding/removing a subview
+  of a live annotation view is the churn in invariant 4.
+- The **demo synthesizes noisy fixes** (`demo/sensor.ts`: speed jitter, `-1`
+  course dropouts, junk accuracy) through the same gate — because an environment
+  that can't reproduce the bug can't prove the fix. That is the Expo Go lesson
+  (truth #6) in a different hat.
+
 ## Symptom → cause (start here when something regresses)
 
 | Symptom | Cause |
@@ -103,6 +136,11 @@ Retrace turns the toggle on.
 | Trail freezes / goes cold | No live head, or too coarse a bucket (invariant 6) |
 | Only some members' trails appear | strokeColor visibility — only members whose coordinates changed got redrawn |
 | Trails/dots flicker while tracking | Zoom re-applied on the tick (invariant 5) |
+| Puck points north for someone who never moved | A non-nullable heading defaulting to `0` (invariant 9) |
+| Arrow spins on a standing member | No motion gate — GPS wander at rest is a few m/s of pure noise (invariant 9) |
+| Tip flickers on/off at a crosswalk | One speed threshold instead of two. Every flip churns the marker view (invariants 4, 9) |
+| Arrow snaps 180° | Bearings averaged arithmetically instead of circularly (invariant 9) |
+| Puck still points somewhere minutes after a member went quiet | Course held forever instead of decaying (invariant 9) |
 
 ## Before you change map code
 

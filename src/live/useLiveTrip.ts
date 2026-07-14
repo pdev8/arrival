@@ -2,9 +2,10 @@ import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Destination, FeedEvent, SessionStop, SimMember, Simulation, StopCategory } from '../demo/simulation';
 import { surfaceError } from '../lib/errors';
-import { LatLng, distanceM } from '../lib/geo';
+import { LatLng } from '../lib/geo';
 import { ensureSignedIn, supabase } from '../lib/supabase';
-import { Tracked, applyBroadcast, mergeSnapshot, simMotion, stateFromSpeed } from './live-helpers';
+import { sensed } from '../lib/motion';
+import { PosWire, Tracked, applyBroadcast, mergeSnapshot, simMotion, stateFromMotion } from './live-helpers';
 import {
   EventRow,
   ParticipantRow,
@@ -35,12 +36,18 @@ interface WireMember extends Tracked {
   isYou: boolean;
 }
 
-interface PosPayload {
+/**
+ * The wire format. `heading` is COURSE OVER GROUND — the way the sender is
+ * travelling, from `watchPositionAsync`. It is never the compass: a phone in a
+ * back pocket points at its owner's backside, and we do not subscribe to
+ * `watchHeadingAsync` anywhere in this app.
+ *
+ * We ship it RAW and let every receiver gate it themselves (lib/motion), so
+ * everyone judges everyone by the same rule instead of trusting whatever
+ * filtering the sender's OS happened to apply.
+ */
+interface PosPayload extends PosWire {
   id: string;
-  lat: number;
-  lng: number;
-  heading: number | null;
-  speed: number | null;
 }
 
 /**
@@ -131,7 +138,8 @@ export function useLiveTrip(
             arrivedState: r.state === 'arrived',
           },
           destRef.current?.pos ?? null,
-          ARRIVE_RADIUS_M
+          ARRIVE_RADIUS_M,
+          Date.now()
         );
         membersRef.current.set(r.user_id, {
           id: r.user_id,
@@ -279,12 +287,18 @@ export function useLiveTrip(
               const now = Date.now();
               if (now - lastPublish < PUBLISH_MS) return;
               lastPublish = now;
+              // Raw readings, normalized only for iOS's -1 ("I don't know"),
+              // which is NOT null and sails straight through a != null check to
+              // become a real-looking speed of minus one metre per second.
+              // Deciding what they MEAN is the receiver's job (lib/motion) —
+              // including ours, one line below.
               const payload: PosPayload = {
                 id: youId,
                 lat: loc.coords.latitude,
                 lng: loc.coords.longitude,
-                heading: loc.coords.heading != null && loc.coords.speed! > 1 ? loc.coords.heading : null,
-                speed: loc.coords.speed,
+                heading: sensed(loc.coords.heading),
+                speed: sensed(loc.coords.speed),
+                acc: sensed(loc.coords.accuracy),
               };
               applyPos(payload);
               channel.send({ type: 'broadcast', event: 'pos', payload }).then((resp) => {
@@ -303,9 +317,12 @@ export function useLiveTrip(
               .update({
                 last_lat: you.pos.latitude,
                 last_lng: you.pos.longitude,
-                last_heading: you.heading,
-                last_speed: you.speed,
-                state: stateFromSpeed(you.speed, you.arrived),
+                // the GATED values, not the last raw sample: null heading when
+                // we haven't earned one, zero speed when we aren't moving. A
+                // late joiner reading this row inherits the truth, not a guess.
+                last_heading: you.motion.heading,
+                last_speed: you.motion.moving ? you.motion.speedMps : 0,
+                state: stateFromMotion(you.motion, you.arrived),
                 last_updated_at: new Date().toISOString(),
               })
               .eq('trip_id', tripId)
@@ -424,7 +441,8 @@ export function useLiveTrip(
         color: m.color,
         isYou: m.isYou,
         pos: m.pos!,
-        heading: m.heading,
+        // heading and moving come from the gate, inside simMotion — there is no
+        // raw heading here to reach for, and that is the point
         level: null,
         trail: m.trail,
         ...simMotion(m, destination?.pos ?? null),
