@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, LayoutAnimation, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, Easing, LayoutAnimation, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import MapView from 'react-native-maps';
 import { ActivityDock, DOCK_PEEK } from '../src/components/ActivityDock';
 import { DestinationMarker } from '../src/components/DestinationMarker';
@@ -12,6 +12,7 @@ import { MemberPager } from '../src/components/MemberPager';
 import { MemberMarker } from '../src/components/MemberMarker';
 import { MemberRail } from '../src/components/MemberRail';
 import { PlaceSheet } from '../src/components/PlaceSheet';
+import { MeetTimeSheet } from '../src/components/MeetTimeSheet';
 import { SessionHeader } from '../src/components/SessionHeader';
 import { StopPin } from '../src/components/StopPin';
 import { TrailPath } from '../src/components/TrailPath';
@@ -41,6 +42,13 @@ const FOLLOW_ALTITUDE: Record<string, number> = { walk: 1400, roadtrip: 90000, m
 /** re-center the follow camera only after the member has moved this far —
  *  keeps the map off the 4 Hz tick without the puck ever leaving the frame */
 const RECENTER_M = 8;
+/**
+ * The one gap under the session bar. The map chips park here, and the cards that
+ * unfold from the bar open here — same number, so a card lands ON its chips
+ * instead of somewhere near them. Measured from the bar's real height, never a
+ * constant: the bar grows when a destination is set.
+ */
+const UNDER_BAR = 6;
 
 export default function SessionScreen() {
   const router = useRouter();
@@ -81,6 +89,7 @@ export default function SessionScreen() {
   const [pickingDest, setPickingDest] = useState(false);
   const [destPick, setDestPick] = useState<LatLng | null>(null);
   const [destSearchOpen, setDestSearchOpen] = useState(false);
+  const [meetOpen, setMeetOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [mapHeading, setMapHeading] = useState(0);
   /** the session bar's measured height — the map chips and the pick banner
@@ -221,7 +230,7 @@ export default function SessionScreen() {
   const headerSub =
     (sim.members.filter((m) => !m.left).length === 0
       ? 'Waiting for members…'
-      : summarizeConvergence(sim.members.filter((m) => !m.left))) +
+      : summarizeConvergence(sim.members.filter((m) => !m.left), sim.meetAt)) +
     (you && you.mode === 'foot' && you.steps > 0 ? ` · ${you.steps.toLocaleString()} steps` : '') +
     ` · ends ${remH > 0 ? `${remH}h ` : ''}${remM}m`;
 
@@ -271,7 +280,30 @@ export default function SessionScreen() {
   // stacked above the sheet — hide them so the sheet rises over map only
   // while any sheet is up — or while you're choosing a destination on the map —
   // the session's own panels get out of the way: the pick banner owns that strip
-  const sheetOpen = inviteOpen || placePick !== null || destSearchOpen || destPick !== null || pickingDest;
+  const sheetOpen = inviteOpen || placePick !== null || destSearchOpen || destPick !== null || pickingDest || meetOpen;
+
+  /**
+   * Everything at the bottom GOES DOWN when a card opens, and comes back up when
+   * it closes. It used to be `{!sheetOpen && …}` — an unmount, which has no
+   * motion at all: the member deck and the dock just ceased to exist, and the
+   * screen lurched. Now they slide out the way they'd slide back.
+   *
+   * They fade as they go, so the travel can be short (a card that has to cross
+   * 400pt to disappear reads as thrown, not dismissed) — and the chips under the
+   * session bar simply fade, because the card that opens lands on top of them.
+   */
+  const bottomOpen = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.timing(bottomOpen, {
+      toValue: sheetOpen ? 0 : 1,
+      duration: sheetOpen ? 200 : 260,
+      easing: sheetOpen ? Easing.in(Easing.cubic) : Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [sheetOpen, bottomOpen]);
+  const bottomDrop = bottomOpen.interpolate({ inputRange: [0, 1], outputRange: [190, 0] });
+  const bottomFade = bottomOpen;
+  const chipFade = bottomOpen;
 
   /**
    * LEAVE — and only for me. Leaving is not ending: the session keeps running
@@ -411,33 +443,49 @@ export default function SessionScreen() {
         sub={headerSub}
         highlightSub={sim.allArrived}
         destinationName={sim.destination?.name ?? null}
+        meetAt={sim.meetAt}
         onBack={() => {
           if (isLive && params.tripId) leaveLiveTrip(params.tripId).catch(() => {});
           router.replace('/');
         }}
         onSetDestination={() => setDestSearchOpen(true)}
+        onSetMeetTime={() => setMeetOpen(true)}
         onInvite={() => setInviteOpen(true)}
         onLeave={leaveSession}
         onHeight={setHeaderH}
       />
 
-      {!sheetOpen && (
-      <MapFabs
-        top={headerH + 8}
-        showTrails={showTrails}
-        onToggleTrails={() => setShowTrails((v) => !v)}
-        showRecenter={!autoFit || !!selectedId}
-        onRecenter={() => {
-          setSelectedId(null);
-          setAutoFit(true);
-          fitCounter.current = 0;
-        }}
-      />
-      )}
+      {/* The chips sit FLUSH under the session bar — they belong to it, and a
+          card that unfolds from the bar should land on them, not float above a
+          gap. `headerH` is measured, so they follow when the bar grows. */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { opacity: chipFade }]}
+        pointerEvents={sheetOpen ? 'none' : 'box-none'}
+      >
+        <MapFabs
+          top={headerH + UNDER_BAR}
+          showTrails={showTrails}
+          onToggleTrails={() => setShowTrails((v) => !v)}
+          showRecenter={!autoFit || !!selectedId}
+          onRecenter={() => {
+            setSelectedId(null);
+            setAutoFit(true);
+            fitCounter.current = 0;
+          }}
+        />
+      </Animated.View>
 
-      {/* member surface: rail of everyone, or the focused member's card */}
-      {!sheetOpen && (
-      <Animated.View style={[styles.memberArea, { transform: [{ translateX: memberX }] }]} pointerEvents="box-none">
+      {/* member surface: rail of everyone, or the focused member's card.
+          It DROPS AWAY when a card opens rather than blinking out — it used to
+          be `{!sheetOpen && …}`, which unmounts, and an unmount has no motion:
+          the whole bottom half of the screen simply ceased to exist. */}
+      <Animated.View
+        style={[
+          styles.memberArea,
+          { opacity: bottomFade, transform: [{ translateX: memberX }, { translateY: bottomDrop }] },
+        ]}
+        pointerEvents={sheetOpen ? 'none' : 'box-none'}
+      >
         {selected ? (
           <MemberPager
             members={deck}
@@ -454,16 +502,21 @@ export default function SessionScreen() {
           <MemberRail members={orderedMembers} selectedId={selectedId} onSelect={select} />
         )}
       </Animated.View>
-      )}
 
-      {!sheetOpen && (
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          { opacity: bottomFade, transform: [{ translateY: bottomDrop }] },
+        ]}
+        pointerEvents={sheetOpen ? 'none' : 'box-none'}
+      >
         <ActivityDock
           sim={sim}
           sessionName={sessionName}
           destinationName={scenario.destination.name}
           onOpenChange={onDockOpenChange}
         />
-      )}
+      </Animated.View>
 
       {pickingDest && (
         <Pressable style={[styles.pickHint, { top: headerH + 8 }]} onPress={() => setPickingDest(false)}>
@@ -477,6 +530,7 @@ export default function SessionScreen() {
         visible={destSearchOpen}
         near={you?.pos ?? sim.members[0]?.pos ?? scenario.initialRegion}
         current={sim.destination?.name ?? null}
+        anchorTop={headerH + UNDER_BAR}
         onSet={(pos, name) => {
           sim.setDestination(pos, name);
           setDestSearchOpen(false);
@@ -500,6 +554,19 @@ export default function SessionScreen() {
           fitCounter.current = 0;
         }}
         onClose={() => setDestPick(null)}
+      />
+
+      {/* when we're meeting — this is what turns every ETA into early or late.
+          It hangs off the measured header, under the chip that opened it. */}
+      <MeetTimeSheet
+        visible={meetOpen}
+        meetAt={sim.meetAt}
+        anchorTop={headerH + UNDER_BAR}
+        onSet={(at) => {
+          sim.setMeetTime(at);
+          setMeetOpen(false);
+        }}
+        onClose={() => setMeetOpen(false)}
       />
 
       <InviteSheet

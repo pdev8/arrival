@@ -1,4 +1,4 @@
-import { compassDir, formatDistance, formatEtaClock, formatEtaCoarse, formatLevel, headlineLabel, memberHeadline, statusLine, timeAgo } from './format';
+import { compassDir, formatDistance, formatEtaClock, formatEtaCoarse, formatLevel, headlineLabel, headlineTone, memberHeadline, statusLine, timeAgo } from './format';
 
 describe('formatEtaClock', () => {
   it('renders minutes:seconds', () => {
@@ -159,5 +159,53 @@ describe('statusLine — free roam', () => {
   });
   it('still reports a stop note in free roam', () => {
     expect(statusLine({ state: 'stopped', etaMin: null, statusNote: 'Coffee', remainingM: 0 })).toBe('Coffee');
+  });
+});
+
+describe('the headline once there is a time to be somewhere', () => {
+  const walking = { etaMin: 12, state: 'walking', traveledM: 800 };
+
+  it('without a meeting time, the ETA is the story', () => {
+    expect(memberHeadline({ ...walking, slackMin: null })).toBe('12:00');
+    expect(headlineLabel({ ...walking, slackMin: null })).toBe('eta');
+  });
+
+  it('with one, LATENESS is the story — "12m" is trivia, "8 late" is why you text the group', () => {
+    expect(memberHeadline({ ...walking, slackMin: -8 })).toBe('8 late');
+    expect(memberHeadline({ ...walking, slackMin: 4 })).toBe('4 early');
+    expect(memberHeadline({ ...walking, slackMin: 0.5 })).toBe('on time');
+  });
+
+  it('the ETA does not vanish — it moves to the label underneath', () => {
+    expect(headlineLabel({ ...walking, slackMin: -8 })).toBe('eta 12m');
+  });
+
+  it('free roam still wins: with nowhere to be, nobody can be late', () => {
+    // slackMin is null here by construction (no eta ⇒ no slack), and the honest
+    // headline is what you HAVE done, not what's left
+    expect(memberHeadline({ etaMin: null, state: 'walking', traveledM: 1609, slackMin: null })).toBe('1.0 mi');
+  });
+
+  it('arrived beats everything — you cannot be late to somewhere you already are', () => {
+    expect(memberHeadline({ ...walking, state: 'arrived', slackMin: -30 })).toBe('here');
+  });
+});
+
+describe('headlineTone — only a real problem takes a member’s colour away', () => {
+  const base = { etaMin: 12, state: 'walking', traveledM: 800 };
+
+  it('flags lateness, and nothing else', () => {
+    expect(headlineTone({ ...base, slackMin: -8 })).toBe('bad');
+  });
+  it('does not celebrate being early — that is not news', () => {
+    expect(headlineTone({ ...base, slackMin: 9 })).toBe('identity');
+    expect(headlineTone({ ...base, slackMin: 0 })).toBe('identity');
+  });
+  it('never paints an UNKNOWN green or red: no meeting time is not "on time"', () => {
+    expect(headlineTone({ ...base, slackMin: null })).toBe('identity');
+  });
+  it('arrival is good news; leaving is neither', () => {
+    expect(headlineTone({ ...base, state: 'arrived' })).toBe('good');
+    expect(headlineTone({ ...base, left: true, slackMin: -40 })).toBe('muted');
   });
 });

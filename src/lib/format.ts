@@ -1,4 +1,5 @@
 /** Display formatting — kept apart from the geometry math in geo.ts. */
+import { punctuality, slackLabel } from './schedule';
 
 /**
  * ETA as a live countdown clock: m:ss under an hour; past 59:59 it switches
@@ -16,26 +17,62 @@ export function formatEtaClock(minutes: number): string {
   return h > 0 ? `${h}:${pad(m)} hr` : `${m}:${pad(s)}`;
 }
 
+/** what every member surface reads to decide its headline number */
+export interface Headline {
+  etaMin: number | null;
+  left?: boolean;
+  state: string;
+  traveledM: number;
+  /** minutes early (+) / late (−) against the meeting time. null = no meeting. */
+  slackMin?: number | null;
+}
+
 /**
- * The headline number for a member, everywhere: an ETA when the group has a
- * destination, and DISTANCE COVERED when it doesn't (free roam — there is
- * nowhere to be, so the honest thing to show is what you've done, not what's
- * left). `coarse` is for map tags, which must not re-render every second.
+ * The headline number for a member, everywhere. Three cases, in order of how
+ * much they tell you:
+ *
+ *  1. THERE'S A TIME TO BE THERE → the slack ("8 late"). This is the number the
+ *     app exists for. "12m" is trivia; "8 late" is why you text the group.
+ *  2. Just a destination → the ETA.
+ *  3. Free roam → DISTANCE COVERED. There's nowhere to be, so the honest thing
+ *     to show is what you've done, not what's left.
+ *
+ * The ETA doesn't vanish in case 1 — it moves to the label underneath.
+ * `coarse` is for map tags, which must not re-render every second.
  */
-export function memberHeadline(
-  m: { etaMin: number | null; left?: boolean; state: string; traveledM: number },
-  coarse = false
-): string {
+export function memberHeadline(m: Headline, coarse = false): string {
   if (m.left) return 'left';
   if (m.etaMin == null) return formatDistance(m.traveledM); // free roam
   if (m.state === 'arrived') return 'here';
+  if (m.slackMin != null) return slackLabel(m.slackMin, true);
   return coarse ? formatEtaCoarse(m.etaMin) : formatEtaClock(m.etaMin);
 }
 
+/**
+ * What the headline number should READ as. The components own the palette; this
+ * owns the meaning.
+ *
+ * Only lateness is flagged. Being early is not news, and a surface that shouts
+ * about it is a surface people stop reading — so everything that isn't a problem
+ * keeps the member's own colour, which is what identifies them.
+ */
+export type HeadlineTone = 'identity' | 'good' | 'bad' | 'muted';
+
+export function headlineTone(m: Headline): HeadlineTone {
+  if (m.left) return 'muted';
+  if (m.state === 'arrived' && m.etaMin != null) return 'good';
+  if (m.slackMin != null && punctuality(m.slackMin) === 'late') return 'bad';
+  return 'identity';
+}
+
 /** what the headline number MEANS — the little label under it */
-export function headlineLabel(m: { etaMin: number | null; state: string }): string {
+export function headlineLabel(m: Pick<Headline, 'etaMin' | 'state' | 'slackMin'>): string {
   if (m.etaMin == null) return 'covered';
-  return m.state === 'arrived' ? '' : 'eta';
+  if (m.state === 'arrived') return '';
+  // when the headline is the slack, the label carries the ETA it was computed
+  // from — the raw number is still worth having, just not worth top billing
+  if (m.slackMin != null) return `eta ${formatEtaCoarse(m.etaMin)}`;
+  return 'eta';
 }
 
 /**
