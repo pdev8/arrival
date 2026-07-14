@@ -28,13 +28,13 @@ import { summarizeConvergence } from '../src/lib/convergence';
 import { LatLng, distanceM } from '../src/lib/geo';
 import { navigateTo } from '../src/lib/nav-deeplinks';
 import { sortMembers } from '../src/lib/roster';
+import { activeStopFor } from '../src/lib/stops';
 
 const FIT_PADDING = { top: 130, right: 60, bottom: 320, left: 60 };
 /** stop-pin slots, pre-mounted: MapView's child list must never grow (see the
  *  map contract). MAX_STOPS is the sim's own cap — one source of truth, so a
  *  stop can never exist without a slot to render into. */
 const MAX_STOP_PINS = MAX_STOPS;
-const TRAIL_PADDING = { top: 150, right: 70, bottom: 340, left: 70 };
 /** follow-mode zoom per scenario kind (Google provider reads zoom…) */
 const FOLLOW_ZOOM: Record<string, number> = { walk: 16.5, roadtrip: 11, mall: 18 };
 /** …but Apple Maps ignores camera.zoom and wants altitude (meters) */
@@ -334,14 +334,37 @@ export default function SessionScreen() {
     );
   };
 
-  const retrace = (m: SimMember) => {
-    if (m.trail.length > 1) {
-      setShowTrails(true); // there has to be a trail to retrace
-      setFollow(false);
-      setAutoFit(false);
-      mapRef.current?.fitToCoordinates(m.trail, { edgePadding: TRAIL_PADDING, animated: true });
-    }
-  };
+  /**
+   * The live card's actions. Retracing someone MID-session is idle curiosity —
+   * the archive already replays a finished session properly, with an animated
+   * retrace. What you want while it's still running is to act on where they are
+   * right now: pull over with them, or go to them.
+   */
+  const stopFor = useCallback((m: SimMember) => activeStopFor(m.id, sim.stops), [sim.stops]);
+
+  /** Navigating to yourself is a joke; on your own card the useful destination is
+   *  THE destination — and in free roam there isn't one, so the button goes dim. */
+  const canNavigate = useCallback(
+    (m: SimMember) => (m.isYou ? !!sim.destination : true),
+    [sim.destination]
+  );
+
+  const navigate = useCallback(
+    (m: SimMember) => {
+      const target = m.isYou ? sim.destination : { pos: m.pos, name: m.name };
+      if (!target) return;
+      navigateTo(target.pos, target.name, m.mode === 'car' ? 'drive' : 'walk');
+    },
+    [sim.destination]
+  );
+
+  const join = useCallback(
+    (m: SimMember) => {
+      const stop = activeStopFor(m.id, sim.stops);
+      if (stop) sim.joinStop(stop.id);
+    },
+    [sim]
+  );
 
   return (
     <View style={styles.screen}>
@@ -496,7 +519,10 @@ export default function SessionScreen() {
             selectedId={selectedId}
             you={you}
             onFocus={focusMember}
-            onRetrace={retrace}
+            stopFor={stopFor}
+            canNavigate={canNavigate}
+            onJoin={join}
+            onNavigate={navigate}
             onClose={() => {
               animateSurface();
               setSelectedId(null);

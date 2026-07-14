@@ -16,6 +16,7 @@ export function AvatarRing({
   color,
   arrived = false,
   count = 14,
+  pulse = false,
 }: {
   /** photo when we have one; falls back to an initial on the member color */
   source?: ImageSourcePropType;
@@ -26,6 +27,8 @@ export function AvatarRing({
   color: string;
   arrived?: boolean;
   count?: number;
+  /** breathe the dot being earned right now — work in progress, not a score */
+  pulse?: boolean;
 }) {
   const face = { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 };
   return (
@@ -37,7 +40,13 @@ export function AvatarRing({
           <Text style={{ color: UI.text, fontSize: avatarSize * 0.42, fontWeight: '800' }}>{name[0]?.toUpperCase()}</Text>
         </View>
       )}
-      <DotRing size={size} progress={progress} color={arrived ? UI.success : color} count={count} />
+      <DotRing
+        size={size}
+        progress={progress}
+        color={arrived ? UI.success : color}
+        count={count}
+        pulse={pulse}
+      />
     </View>
   );
 }

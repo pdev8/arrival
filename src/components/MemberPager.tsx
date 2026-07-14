@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { FlatList, View, useWindowDimensions } from 'react-native';
-import { SimMember } from '../demo/simulation';
+import { SessionStop, SimMember } from '../demo/simulation';
 import { MemberCard } from './MemberCard';
 
 interface Props {
@@ -10,7 +10,11 @@ interface Props {
   selectedId: string | null;
   you?: SimMember;
   onFocus: (id: string) => void;
-  onRetrace: (m: SimMember) => void;
+  /** the stop a member is at, if any — what Join would join */
+  stopFor: (m: SimMember) => SessionStop | null;
+  canNavigate: (m: SimMember) => boolean;
+  onJoin: (m: SimMember) => void;
+  onNavigate: (m: SimMember) => void;
   onClose: () => void;
 }
 
@@ -31,7 +35,7 @@ interface Props {
  *    page must not scroll the list again — that was the other half of the
  *    snap-back.
  */
-export function MemberPager({ members, selectedId, you, onFocus, onRetrace, onClose }: Props) {
+export function MemberPager({ members, selectedId, you, onFocus, stopFor, canNavigate, onJoin, onNavigate, onClose }: Props) {
   const { width } = useWindowDimensions();
   const listRef = useRef<FlatList<string>>(null);
 
@@ -88,7 +92,15 @@ export function MemberPager({ members, selectedId, you, onFocus, onRetrace, onCl
         if (!m) return <View style={{ width }} />;
         return (
           <View style={{ width }}>
-            <MemberCard member={m} you={youRef.current} onRetrace={() => onRetrace(m)} onClose={onClose} />
+            <MemberCard
+              member={m}
+              you={youRef.current}
+              stop={stopFor(m)}
+              canNavigate={canNavigate(m)}
+              onJoin={() => onJoin(m)}
+              onNavigate={() => onNavigate(m)}
+              onClose={onClose}
+            />
           </View>
         );
       }}
