@@ -43,12 +43,16 @@ const FOLLOW_ALTITUDE: Record<string, number> = { walk: 1400, roadtrip: 90000, m
  *  keeps the map off the 4 Hz tick without the puck ever leaving the frame */
 const RECENTER_M = 8;
 /**
- * The one gap under the session bar. The map chips park here, and the cards that
- * unfold from the bar open here — same number, so a card lands ON its chips
- * instead of somewhere near them. Measured from the bar's real height, never a
- * constant: the bar grows when a destination is set.
+ * THE gap between any two stacked surfaces, and there is only one of it.
+ *
+ * The map chips sit this far under the session bar; the cards that unroll from
+ * the bar open at exactly the same line (so a card lands ON its chips, not near
+ * them); and the member deck sits this far above the activity dock. One number,
+ * so the screen has a single vertical rhythm instead of three arbitrary ones.
+ *
+ * It is always measured off a real height — never added to a hard-coded one.
  */
-const UNDER_BAR = 6;
+const SURFACE_GAP = 6;
 
 export default function SessionScreen() {
   const router = useRouter();
@@ -463,7 +467,7 @@ export default function SessionScreen() {
         pointerEvents={sheetOpen ? 'none' : 'box-none'}
       >
         <MapFabs
-          top={headerH + UNDER_BAR}
+          top={headerH + SURFACE_GAP}
           showTrails={showTrails}
           onToggleTrails={() => setShowTrails((v) => !v)}
           showRecenter={!autoFit || !!selectedId}
@@ -530,7 +534,7 @@ export default function SessionScreen() {
         visible={destSearchOpen}
         near={you?.pos ?? sim.members[0]?.pos ?? scenario.initialRegion}
         current={sim.destination?.name ?? null}
-        anchorTop={headerH + UNDER_BAR}
+        anchorTop={headerH + SURFACE_GAP}
         onSet={(pos, name) => {
           sim.setDestination(pos, name);
           setDestSearchOpen(false);
@@ -561,7 +565,7 @@ export default function SessionScreen() {
       <MeetTimeSheet
         visible={meetOpen}
         meetAt={sim.meetAt}
-        anchorTop={headerH + UNDER_BAR}
+        anchorTop={headerH + SURFACE_GAP}
         onSet={(at) => {
           sim.setMeetTime(at);
           setMeetOpen(false);
@@ -594,7 +598,7 @@ export default function SessionScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: UI.bg },
-  memberArea: { position: 'absolute', left: 0, right: 0, bottom: DOCK_PEEK + 20 },
+  memberArea: { position: 'absolute', left: 0, right: 0, bottom: DOCK_PEEK + SURFACE_GAP },
   pickHint: {
     position: 'absolute',
     left: 12,
