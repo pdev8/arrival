@@ -3,7 +3,8 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { compassDir, formatDistance, formatLevel, headlineLabel, memberHeadline, statusLine } from '../lib/format';
+import { compassDir, formatDistance, formatLevel, headlineLabel, headlineTone, memberHeadline, statusLine } from '../lib/format';
+import { toneColor } from '../lib/tone';
 import { bearingDeg, distanceM } from '../lib/geo';
 import { STATE_ICON } from '../lib/icons';
 import { AvatarRing } from './AvatarRing';
@@ -72,7 +73,7 @@ function MemberCardInner({ member, you, onRetrace, onClose }: Props) {
           </View>
         </View>
         <View style={styles.etaCol}>
-          <Text style={[styles.eta, member.left ? { color: UI.textDim } : { color: arrived ? UI.success : member.color }]}>
+          <Text style={[styles.eta, { color: toneColor(headlineTone(member), member.color) }]}>
             {member.left ? '—' : memberHeadline(member)}
           </Text>
           {!member.left && !!headlineLabel(member) && (
@@ -112,6 +113,10 @@ export const MemberCard = React.memo(
     prev.member.steps === next.member.steps &&
     Math.round(prev.member.remainingM) === Math.round(next.member.remainingM) &&
     Math.round((prev.member.etaMin ?? -1) * 60) === Math.round((next.member.etaMin ?? -1) * 60) &&
+    // slack in its own right: a member standing still has a FROZEN eta and still
+    // gets later as the meeting approaches. Without this the card would sit on
+    // "5 min late" while they miss the whole thing.
+    Math.round(prev.member.slackMin ?? Infinity) === Math.round(next.member.slackMin ?? Infinity) &&
     Math.round(prev.member.traveledM / 10) === Math.round(next.member.traveledM / 10) &&
     filledDots(prev.member.progress, 16) === filledDots(next.member.progress, 16) &&
     prev.member.pos === next.member.pos &&

@@ -3,11 +3,13 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { UI } from '../lib/colors';
+import { formatMeetTime } from '../lib/schedule';
 import { Glass } from './Glass';
 
 /**
- * Session title bar: back, name + convergence line, and the three things you
- * can do to the session — set where you're going, invite people, and leave.
+ * Session title bar: back, name + convergence line, and the four things you
+ * can do to the session — set where you're going, set when you're meeting,
+ * invite people, and leave.
  *
  * Leave is MINE alone: the session keeps running for everyone else and I can
  * rejoin with the same code. There is deliberately no "end for everyone" —
@@ -25,9 +27,11 @@ export function SessionHeader({
   title,
   sub,
   destinationName,
+  meetAt,
   highlightSub = false,
   onBack,
   onSetDestination,
+  onSetMeetTime,
   onInvite,
   onLeave,
   onHeight,
@@ -36,10 +40,14 @@ export function SessionHeader({
   sub: string;
   /** null = free roam */
   destinationName: string | null;
+  /** null = no time to be anywhere. Independent of the destination — you can
+   *  agree on eight o'clock before you've agreed on the restaurant. */
+  meetAt: number | null;
   /** amber sub line — used once everyone has arrived */
   highlightSub?: boolean;
   onBack: () => void;
   onSetDestination: () => void;
+  onSetMeetTime: () => void;
   onInvite: () => void;
   /** leave — MY participation only. The session lives on without me, and I can
    *  rejoin with the same code. It is not an "end session" button. */
@@ -51,6 +59,13 @@ export function SessionHeader({
 }) {
   return (
     <SafeAreaView
+      // TOP ONLY. SafeAreaView defaults to ALL edges, so without this it pads the
+      // BOTTOM by the home-indicator inset (~34pt) — inside a bar that is pinned
+      // to top:0, where a bottom inset means nothing. That padding is invisible,
+      // but it is inside the view we MEASURE, so onHeight over-reported by 34pt
+      // and everything that parks under the bar — the chips, the cards that
+      // unfold from it — sat a phantom inch below it.
+      edges={['top']}
       style={styles.wrap}
       pointerEvents="box-none"
       onLayout={(e) => onHeight?.(e.nativeEvent.layout.height)}
@@ -79,20 +94,38 @@ export function SessionHeader({
           </Pressable>
         </View>
 
-        <Pressable style={styles.dest} onPress={onSetDestination}>
-          <MaterialCommunityIcons
-            name={destinationName ? 'flag-variant' : 'flag-plus-outline'}
-            size={13}
-            color={destinationName ? UI.brand : UI.textDim}
-          />
-          <Text
-            style={[styles.destText, !destinationName && styles.destEmpty]}
-            numberOfLines={1}
-          >
-            {destinationName ?? 'Set destination'}
-          </Text>
-          <MaterialCommunityIcons name="pencil" size={11} color={UI.textDim} />
-        </Pressable>
+        {/* WHERE and WHEN, side by side and separately tappable. They are
+            genuinely independent: a group can settle on eight o'clock long
+            before it settles on the restaurant, and either can be set — or
+            changed — after everyone is already out the door. */}
+        <View style={styles.plan}>
+          <Pressable style={styles.dest} onPress={onSetDestination}>
+            <MaterialCommunityIcons
+              name={destinationName ? 'flag-variant' : 'flag-plus-outline'}
+              size={13}
+              color={destinationName ? UI.brand : UI.textDim}
+            />
+            <Text
+              style={[styles.destText, !destinationName && styles.planEmpty]}
+              numberOfLines={1}
+            >
+              {destinationName ?? 'Set destination'}
+            </Text>
+          </Pressable>
+
+          <View style={styles.planSep} />
+
+          <Pressable style={styles.time} onPress={onSetMeetTime} hitSlop={6}>
+            <MaterialCommunityIcons
+              name={meetAt ? 'clock-outline' : 'clock-plus-outline'}
+              size={13}
+              color={meetAt ? UI.brand : UI.textDim}
+            />
+            <Text style={[styles.timeText, !meetAt && styles.planEmpty]} numberOfLines={1}>
+              {meetAt ? formatMeetTime(meetAt, Date.now()) : 'Set time'}
+            </Text>
+          </Pressable>
+        </View>
       </Glass>
     </SafeAreaView>
   );
@@ -128,14 +161,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dest: {
+  plan: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
     paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.12)',
   },
+  // The place can be long ("Murray's Cheese, 254 Bleecker"); the time never is —
+  // so the place flexes and the time holds its ground. Both carry real vertical
+  // padding: as bare text-and-icon rows they were ~13pt tall, which is a third
+  // of the smallest thing a thumb can reliably hit.
+  dest: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 6,
+    paddingRight: 4,
+  },
   destText: { color: UI.text, fontSize: 12.5, fontWeight: '700', flex: 1 },
-  destEmpty: { color: UI.textDim, fontWeight: '600' },
+  planSep: { width: StyleSheet.hairlineWidth, height: 14, backgroundColor: 'rgba(255,255,255,0.18)' },
+  // an actual chip, so it looks like the control it is — and so the card that
+  // grows out of it has something to grow out of
+  time: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+  },
+  timeText: { color: UI.text, fontSize: 12.5, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  planEmpty: { color: UI.textDim, fontWeight: '600' },
 });

@@ -39,6 +39,10 @@ export function NameDestinationSheet({
   const trimmed = name.trim();
   return (
     <Modal visible={!!pos} transparent animationType="fade" onRequestClose={onClose}>
+      {/* backdrop FIRST — rendered after the panel it would sit on top of it,
+          swallowing every tap and closing the sheet (see DestinationSheet) */}
+      <Pressable style={styles.backdrop} onPress={onClose} />
+
       <Animated.View
         style={[
           styles.dropWrap,
@@ -76,9 +80,6 @@ export function NameDestinationSheet({
           </Glass>
         </SafeAreaView>
       </Animated.View>
-
-      {/* the keyboard lives down here now, out of the results' way */}
-      <Pressable style={styles.backdrop} onPress={onClose} />
     </Modal>
   );
 }

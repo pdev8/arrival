@@ -3,7 +3,8 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SimMember } from '../demo/simulation';
 import { UI } from '../lib/colors';
-import { memberHeadline } from '../lib/format';
+import { headlineTone, memberHeadline } from '../lib/format';
+import { toneColor } from '../lib/tone';
 import { AvatarRing } from './AvatarRing';
 import { filledDots } from './DotRing';
 import { Glass } from './Glass';
@@ -66,7 +67,7 @@ const RailChip = React.memo(
             {m.name}
           </Text>
           <View style={styles.etaRow}>
-            <Text style={[styles.eta, m.left ? { color: UI.textDim } : { color: arrived ? UI.success : m.color }]}>
+            <Text style={[styles.eta, { color: toneColor(headlineTone(m), m.color) }]}>
               {memberHeadline(m)}
             </Text>
             {!m.left && m.state === 'stopped' && (

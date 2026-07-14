@@ -5,6 +5,7 @@ import { surfaceError } from '../lib/errors';
 import { LatLng } from '../lib/geo';
 import { ensureSignedIn, supabase } from '../lib/supabase';
 import { sensed } from '../lib/motion';
+import { slackMin } from '../lib/schedule';
 import { PosWire, Tracked, applyBroadcast, mergeSnapshot, simMotion, stateFromMotion } from './live-helpers';
 import {
   EventRow,
@@ -77,6 +78,9 @@ export function useLiveTrip(
   const [destination, setDest] = useState<Destination | null>(initialDestination);
   const destRef = useRef<Destination | null>(initialDestination);
   destRef.current = destination;
+  /** when we're supposed to BE there — trip state, like the destination, and
+   *  independent of it: eight o'clock can be agreed before the restaurant is */
+  const [meetAt, setMeet] = useState<number | null>(null);
   const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [stops, setStops] = useState<SessionStop[]>([]);
   const [tick, setTick] = useState(0); // bumped on every wire update
@@ -92,23 +96,26 @@ export function useLiveTrip(
     startAtRef.current = Date.now();
     const bump = () => !dead && setTick((t) => t + 1);
 
-    /** the destination is TRIP state: read it, then follow it live — anyone
-     *  can set or change it mid-session and everyone must see the same flag */
-    const loadDestination = async () => {
+    /** WHERE and WHEN are both TRIP state: read them, then follow them live —
+     *  anyone can set or change either mid-session, and everyone must be looking
+     *  at the same plan. (One read, because they arrive on the same row and the
+     *  same realtime UPDATE.) */
+    const loadPlan = async () => {
       const { data, error } = await supabase!
         .from('trips')
-        .select('destination_name,destination_lat,destination_lng')
+        .select('destination_name,destination_lat,destination_lng,meet_at')
         .eq('id', tripId)
         .maybeSingle();
       if (error || dead || !data) return;
-      const next =
+      setDest(
         data.destination_lat != null && data.destination_lng != null
           ? {
               name: data.destination_name ?? 'Destination',
               pos: { latitude: data.destination_lat, longitude: data.destination_lng },
             }
-          : null;
-      setDest(next);
+          : null
+      );
+      setMeet(data.meet_at ? Date.parse(data.meet_at) : null);
     };
 
     const loadRoster = async (youId: string) => {
@@ -216,7 +223,7 @@ export function useLiveTrip(
           ({ error }) => error && console.warn('display name', error.message)
         );
         await loadRoster(youId);
-        await Promise.all([loadDestination(), loadFeed(youId), loadStops(youId)]);
+        await Promise.all([loadPlan(), loadFeed(youId), loadStops(youId)]);
 
         const refreshStops = () => loadStops(youId);
         const channel = supabase!
@@ -261,7 +268,7 @@ export function useLiveTrip(
           .on(
             'postgres_changes',
             { event: 'UPDATE', schema: 'public', table: 'trips', filter: `id=eq.${tripId}` },
-            loadDestination
+            loadPlan
           )
           .on('postgres_changes', { event: '*', schema: 'public', table: 'stop_votes' }, refreshStops)
           .on(
@@ -410,6 +417,23 @@ export function useLiveTrip(
     [tripId]
   );
 
+  const setMeetTime = useCallback(
+    (at: number | null) => {
+      if (!supabase || !tripId) return;
+      // optimistic, same as the destination — the realtime trips UPDATE brings
+      // everyone else along. The RPC also pushes ends_at out past the meeting,
+      // so agreeing to meet at eight can't archive the session at seven.
+      setMeet(at);
+      supabase
+        .rpc('set_meet_time', {
+          p_trip_id: tripId,
+          p_meet_at: at == null ? null : new Date(at).toISOString(),
+        })
+        .then(({ error }) => error && surfaceError('Setting the meeting time', error));
+    },
+    [tripId]
+  );
+
   const react = useCallback((eventId: string, emoji: string) => {
     const youId = youIdRef.current;
     if (!supabase || !youId) return;
@@ -431,28 +455,37 @@ export function useLiveTrip(
   return useMemo(() => {
     if (!enabled || !tripId) return null;
     const youId = youIdRef.current ?? '';
+    const now = Date.now();
     const members: SimMember[] = [...membersRef.current.values()]
       .filter((m) => m.pos)
-      .map((m) => ({
-        id: youify(m.id, youId),
-        left: m.left || undefined,
-        name: m.name,
-        avatar: undefined, // photos arrive with real profiles (A epic)
-        color: m.color,
-        isYou: m.isYou,
-        pos: m.pos!,
-        // heading and moving come from the gate, inside simMotion — there is no
-        // raw heading here to reach for, and that is the point
-        level: null,
-        trail: m.trail,
-        ...simMotion(m, destination?.pos ?? null),
-      }));
+      .map((m) => {
+        const motion = simMotion(m, destination?.pos ?? null);
+        return {
+          id: youify(m.id, youId),
+          left: m.left || undefined,
+          name: m.name,
+          avatar: undefined, // photos arrive with real profiles (A epic)
+          color: m.color,
+          isYou: m.isYou,
+          pos: m.pos!,
+          // heading and moving come from the gate, inside simMotion — there is no
+          // raw heading here to reach for, and that is the point
+          level: null,
+          trail: m.trail,
+          ...motion,
+          // and lateness is measured against the clock on the wall, not the ETA:
+          // a member standing perfectly still gets later all by themselves
+          slackMin: slackMin(motion.etaMin, meetAt, now),
+        };
+      });
     return {
       members,
       stops,
       feed,
       destination,
       setDestination,
+      meetAt,
+      setMeetTime,
       // free roam never "completes" — there's nowhere to arrive. It ends when
       // someone ends it.
       allArrived:
@@ -468,5 +501,5 @@ export function useLiveTrip(
       suggestStop: postStop('suggestion'),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, tripId, tick, feed, stops, destination, setDestination, vote, react, joinStop, postStop]);
+  }, [enabled, tripId, tick, feed, stops, destination, setDestination, meetAt, setMeetTime, vote, react, joinStop, postStop]);
 }
