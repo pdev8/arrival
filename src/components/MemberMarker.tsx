@@ -60,18 +60,12 @@ export const MemberMarker = React.memo(
     prev.member.level === next.member.level &&
     headingBucket(prev.member.heading) === headingBucket(next.member.heading) &&
     Math.round((prev.member.etaMin ?? -1)) === Math.round((next.member.etaMin ?? -1)) &&
-    // slack has to be here in its own right: a member standing perfectly still
-    // has a FROZEN eta and still gets later as the meeting approaches. Without
-    // this their tag would say "5 late" forever.
-    minuteBucket(prev.member.slackMin) === minuteBucket(next.member.slackMin) &&
     Math.round(prev.member.traveledM / 50) === Math.round(next.member.traveledM / 50)
 );
 
 /** 5° buckets, and a bucket of its own for "we don't know" — which is emphatically
  *  not the same as 0°, which is due north. */
 const headingBucket = (h: number | null) => (h == null ? -1 : Math.round(h / 5));
-/** whole minutes, with a bucket for "no meeting time" that no real value can hit */
-const minuteBucket = (n: number | null | undefined) => (n == null ? Infinity : Math.round(n));
 
 function MemberMarkerInner({ member, mapHeading = 0, selected, repaintTick: _repaintTick, onPress }: Props) {
   // THREE HONEST STATES, and the third one is the whole point:
@@ -108,7 +102,6 @@ function MemberMarkerInner({ member, mapHeading = 0, selected, repaintTick: _rep
         level={member.level}
         left={!!member.left}
         etaMin={member.etaMin}
-        slackMin={member.slackMin}
         traveledM={member.traveledM}
         rot={rot}
         moving={moving}
@@ -126,9 +119,6 @@ interface PuckProps {
   level: number | null;
   left: boolean;
   etaMin: number | null;
-  /** early (+) / late (−) against the meeting time — the tag says this when it
-   *  exists, because "8 late" beats "12m" every time */
-  slackMin: number | null;
   traveledM: number;
   rot: number;
   /** travelling right now — the tip is lit */
@@ -143,12 +133,11 @@ interface PuckProps {
  * actually draws, so its native view tree is created once and left alone.
  */
 const Puck = React.memo(
-  function Puck({ name, color, avatar, state, level, left, etaMin, slackMin, traveledM, rot, moving, known }: PuckProps) {
-    // A meeting time → "8 late". A destination → "12m". Free roam → distance
-    // covered. Always the COARSE form: a live m:ss countdown inside a marker
-    // re-renders its custom view every second, and that is how Apple Maps loses
-    // pucks (see the map contract).
-    const eta = memberHeadline({ etaMin, slackMin, left, state, traveledM }, true);
+  function Puck({ name, color, avatar, state, level, left, etaMin, traveledM, rot, moving, known }: PuckProps) {
+    // A destination → "12m". Free roam → distance covered. Always the COARSE
+    // form: a live m:ss countdown inside a marker re-renders its custom view
+    // every second, and that is how Apple Maps loses pucks (the map contract).
+    const eta = memberHeadline({ etaMin, left, state, traveledM }, true);
     return (
       <View style={[styles.wrap, left && styles.leftDim]}>
         <View style={[styles.holder, { transform: [{ rotate: `${rot}deg` }] }]}>
@@ -202,7 +191,6 @@ const Puck = React.memo(
     p.moving === n.moving &&
     p.known === n.known &&
     Math.round(p.etaMin ?? -1) === Math.round(n.etaMin ?? -1) &&
-    minuteBucket(p.slackMin) === minuteBucket(n.slackMin) &&
     Math.round(p.traveledM / 50) === Math.round(n.traveledM / 50)
 );
 

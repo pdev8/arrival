@@ -5,7 +5,6 @@ import { surfaceError } from '../lib/errors';
 import { LatLng } from '../lib/geo';
 import { ensureSignedIn, supabase } from '../lib/supabase';
 import { sensed } from '../lib/motion';
-import { slackMin } from '../lib/schedule';
 import { PosWire, Tracked, applyBroadcast, mergeSnapshot, simMotion, stateFromMotion } from './live-helpers';
 import {
   EventRow,
@@ -455,7 +454,6 @@ export function useLiveTrip(
   return useMemo(() => {
     if (!enabled || !tripId) return null;
     const youId = youIdRef.current ?? '';
-    const now = Date.now();
     const members: SimMember[] = [...membersRef.current.values()]
       .filter((m) => m.pos)
       .map((m) => {
@@ -473,9 +471,6 @@ export function useLiveTrip(
           level: null,
           trail: m.trail,
           ...motion,
-          // and lateness is measured against the clock on the wall, not the ETA:
-          // a member standing perfectly still gets later all by themselves
-          slackMin: slackMin(motion.etaMin, meetAt, now),
         };
       });
     return {

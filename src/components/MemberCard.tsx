@@ -159,10 +159,6 @@ export const MemberCard = React.memo(
     prev.member.steps === next.member.steps &&
     Math.round(prev.member.remainingM) === Math.round(next.member.remainingM) &&
     Math.round((prev.member.etaMin ?? -1) * 60) === Math.round((next.member.etaMin ?? -1) * 60) &&
-    // slack in its own right: a member standing still has a FROZEN eta and still
-    // gets later as the meeting approaches. Without this the card would sit on
-    // "5 min late" while they miss the whole thing.
-    Math.round(prev.member.slackMin ?? Infinity) === Math.round(next.member.slackMin ?? Infinity) &&
     Math.round(prev.member.traveledM / 10) === Math.round(next.member.traveledM / 10) &&
     filledDots(prev.member.progress, 16) === filledDots(next.member.progress, 16) &&
     // the ring breathes only while they're closing the gap — a stopped member's

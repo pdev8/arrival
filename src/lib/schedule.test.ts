@@ -1,80 +1,14 @@
 import {
-  ONTIME_BAND_MIN,
   formatClockTime,
   formatMeetTime,
   resolveMeetTime,
   splitClock,
-  punctuality,
-  slackLabel,
-  slackMin,
   untilLabel,
 } from './schedule';
 
 /** a fixed local wall-clock instant so these never depend on when they run */
 const at = (h: number, m = 0, day = 14) => new Date(2026, 6, day, h, m, 0, 0).getTime();
-const SEVEN_PM = at(19);
 
-
-describe('slackMin — the number the app exists to show', () => {
-  it('is positive when you will beat the meeting', () => {
-    // 6:30, meeting at 7:00, you are 20 min out → 10 min early
-    expect(slackMin(20, SEVEN_PM, at(18, 30))).toBeCloseTo(10, 5);
-  });
-
-  it('is negative when you will not', () => {
-    // 6:30, meeting at 7:00, you are 45 min out → 15 min late
-    expect(slackMin(45, SEVEN_PM, at(18, 30))).toBeCloseTo(-15, 5);
-  });
-
-  it('has no answer without a meeting time — and no answer is not "on time"', () => {
-    expect(slackMin(12, null, at(18, 30))).toBeNull();
-  });
-
-  it('has no answer without an ETA (free roam: there is nowhere to be)', () => {
-    expect(slackMin(null, SEVEN_PM, at(18, 30))).toBeNull();
-  });
-
-  it('keeps counting down while you stand still — lateness accrues by itself', () => {
-    const stuck = 20; // not moving, ETA frozen
-    const early = slackMin(stuck, SEVEN_PM, at(18, 30))!;
-    const later = slackMin(stuck, SEVEN_PM, at(18, 50))!;
-    expect(later).toBeLessThan(early);
-    expect(punctuality(early)).toBe('early');
-    expect(punctuality(later)).toBe('late');
-  });
-});
-
-describe('punctuality', () => {
-  it('does not cry wolf over ninety seconds', () => {
-    expect(punctuality(-1.5)).toBe('ontime');
-    expect(punctuality(1.5)).toBe('ontime');
-    expect(punctuality(0)).toBe('ontime');
-  });
-  it('calls it past the band', () => {
-    expect(punctuality(-(ONTIME_BAND_MIN + 0.1))).toBe('late');
-    expect(punctuality(ONTIME_BAND_MIN + 0.1)).toBe('early');
-  });
-});
-
-describe('slackLabel', () => {
-  it('says the thing that makes you text the group', () => {
-    expect(slackLabel(-8)).toBe('8 min late');
-    expect(slackLabel(4)).toBe('4 min early');
-    expect(slackLabel(0)).toBe('on time');
-  });
-  it('goes compact for map tags and rail chips', () => {
-    expect(slackLabel(-8, true)).toBe('8 late');
-    expect(slackLabel(4, true)).toBe('4 early');
-  });
-  it('switches to hours rather than printing "94 min late"', () => {
-    expect(slackLabel(-94)).toBe('1.6 hr late');
-    expect(slackLabel(-94, true)).toBe('1.6h late');
-  });
-  it('never says "0 min late" — that is on time, or it is a minute', () => {
-    expect(slackLabel(-2.4)).toBe('2 min late');
-    expect(slackLabel(-2.01)).toBe('2 min late');
-  });
-});
 
 describe('formatClockTime / formatMeetTime', () => {
   it('reads like a clock, not an ISO string', () => {

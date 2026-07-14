@@ -1,57 +1,16 @@
 /**
- * The meeting time is what turns an ETA into something you can act on.
+ * The meeting time: when the group has agreed to BE somewhere.
  *
- * "12 minutes away" is trivia — it doesn't tell you whether to hurry, whether to
- * order, or whether to text anyone. "8 minutes late" tells you all three. Every
- * function here converts the first kind of number into the second.
+ * This module formats it and parses it. It deliberately does NOT derive
+ * early-or-late from it.
  *
- * Two states are deliberately distinct and must not be collapsed:
- *   - NO MEETING TIME. Nobody is early or late, because there is nothing to be
- *     late for. Free roam lives here, and so does a session that hasn't decided.
- *   - A MEETING TIME, and an ETA. Now there is slack, and slack has a sign.
- * `null` means the first. It never means "on time".
+ * That was built (PR #45) and backed out on sight. Every ETA in the product
+ * became "8 late", and a map whose every surface is scolding you is a map that
+ * has stopped telling you where anyone is. The meeting time earns its keep as a
+ * plain fact in the header — "Joe's Pizza · 8:00 PM" — which is what a group
+ * needs and nothing more. If lateness returns, it returns as something you look
+ * at on purpose, not as the headline number everywhere.
  */
-
-/**
- * Inside this band nobody is "late" — they're on time. Ninety seconds is not
- * lateness, and a product that says so is a product that cries wolf.
- */
-export const ONTIME_BAND_MIN = 2;
-
-export type Punctuality = 'early' | 'ontime' | 'late';
-
-/**
- * Minutes of slack against the meeting: **positive = early, negative = late.**
- *
- * `null` when the question has no answer — no meeting time, or no ETA (free
- * roam, a member we can't route yet). Null is not "on time" and the UI must
- * never colour it as such.
- */
-export function slackMin(etaMin: number | null, meetAt: number | null, now: number): number | null {
-  if (etaMin == null || meetAt == null) return null;
-  return (meetAt - now) / 60_000 - etaMin;
-}
-
-export function punctuality(slack: number): Punctuality {
-  if (slack > ONTIME_BAND_MIN) return 'early';
-  if (slack < -ONTIME_BAND_MIN) return 'late';
-  return 'ontime';
-}
-
-/**
- * "8 min late" · "4 min early" · "on time".
- * `coarse` drops the unit for tight surfaces (map tags, rail chips): "8 late".
- */
-export function slackLabel(slack: number, coarse = false): string {
-  const p = punctuality(slack);
-  if (p === 'ontime') return 'on time';
-  const word = p === 'late' ? 'late' : 'early';
-  const mins = Math.max(1, Math.round(Math.abs(slack)));
-  if (mins < 60) return coarse ? `${mins} ${word}` : `${mins} min ${word}`;
-  const hrs = mins / 60;
-  const h = hrs >= 10 ? String(Math.round(hrs)) : hrs.toFixed(1).replace(/\.0$/, '');
-  return coarse ? `${h}h ${word}` : `${h} hr ${word}`;
-}
 
 /**
  * "8:00 PM". Written out by hand rather than through `Intl`, which Hermes does
