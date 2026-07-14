@@ -5,8 +5,8 @@ import { HeadlineTone } from './format';
  * A headline's MEANING (lib/format decides that) → the colour it wears.
  *
  * Identity keeps the member's own colour, because that is what tells you whose
- * number you're reading. Only a real problem takes it away — being late is the
- * one thing worth interrupting identity for.
+ * number you're reading. Nothing currently takes it away except arriving and
+ * leaving — both facts about the member, not judgements about them.
  */
 export function toneColor(tone: HeadlineTone, memberColor: string): string {
   switch (tone) {
@@ -14,8 +14,6 @@ export function toneColor(tone: HeadlineTone, memberColor: string): string {
       return UI.textDim;
     case 'good':
       return UI.success;
-    case 'bad':
-      return UI.danger;
     default:
       return memberColor;
   }

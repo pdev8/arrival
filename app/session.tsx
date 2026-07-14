@@ -234,7 +234,7 @@ export default function SessionScreen() {
   const headerSub =
     (sim.members.filter((m) => !m.left).length === 0
       ? 'Waiting for members…'
-      : summarizeConvergence(sim.members.filter((m) => !m.left), sim.meetAt)) +
+      : summarizeConvergence(sim.members.filter((m) => !m.left))) +
     (you && you.mode === 'foot' && you.steps > 0 ? ` · ${you.steps.toLocaleString()} steps` : '') +
     ` · ends ${remH > 0 ? `${remH}h ` : ''}${remM}m`;
 
@@ -577,6 +577,7 @@ export default function SessionScreen() {
       {/* named after tapping the map, when search isn't the right tool */}
       <NameDestinationSheet
         pos={destPick}
+        anchorTop={headerH + SURFACE_GAP}
         onSet={(name) => {
           if (destPick) sim.setDestination(destPick, name);
           setDestPick(null);

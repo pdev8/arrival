@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImageSourcePropType } from 'react-native';
 import {
   LatLng,
@@ -9,7 +9,7 @@ import {
   routeSlice,
 } from '../lib/geo';
 import { Fix, Motion, motionFrom, pushFix } from '../lib/motion';
-import { formatClockTime, slackMin } from '../lib/schedule';
+import { formatClockTime } from '../lib/schedule';
 import { CATEGORY_EMOJI, LevelSpan, MemberSeed, Scenario, StopCategory } from './data';
 import { Stoplight, findLights } from './lights';
 import { Reactions, toggleReaction } from './reactions';
@@ -77,12 +77,6 @@ export interface SimMember {
   mode: 'foot' | 'car';
   /** steps taken this session (0 for drivers) */
   steps: number;
-  /**
-   * Minutes early (+) or late (−) against the meeting time. NULL when the
-   * question has no answer: no meeting time, or no ETA. Null is not "on time" —
-   * every surface that colours this must not paint an unknown green.
-   */
-  slackMin: number | null;
   /** fraction of their route completed, 0..1 — drives the progress rings */
   progress: number;
   /** floors relative to street (-1 = B1, 2 = F2), null when at street level */
@@ -412,17 +406,8 @@ export function useSimulation(
     [publish]
   );
 
-  // Slack is the only field that moves on the WALL clock rather than the sim's,
-  // so it's computed here at the boundary rather than inside buildSnapshot — a
-  // member standing perfectly still still gets later as eight o'clock approaches.
-  const members = useMemo(
-    () => snapshot.members.map((m) => ({ ...m, slackMin: slackMin(m.etaMin, meetAt, Date.now()) })),
-    [snapshot.members, meetAt]
-  );
-
   return {
     ...snapshot,
-    members,
     destination,
     setDestination,
     meetAt,
@@ -669,9 +654,6 @@ function buildSnapshot(s: SimState): {
       moving: m.motion.moving,
       state: m.arrived ? 'arrived' : m.stopUntil !== null ? 'stopped' : moving,
       etaMin: remainingM / m.seed.cruiseMps / 60 + stopDelayMin,
-      // filled in at the hook's boundary: slack runs on the wall clock, not the
-      // sim's, and buildSnapshot has no business knowing what time it is
-      slackMin: null,
       remainingM,
       mode,
       steps: mode === 'foot' ? Math.round((m.progressM - m.startM) / STRIDE_M) : 0,

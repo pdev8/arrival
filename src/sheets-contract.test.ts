@@ -26,9 +26,15 @@ import { join } from 'path';
 
 const DIR = join(__dirname, 'components');
 
-const overlays = readdirSync(DIR)
-  .filter((f) => f.endsWith('.tsx'))
-  .filter((f) => readFileSync(join(DIR, f), 'utf8').includes('<Modal'));
+const src = (f: string) => readFileSync(join(DIR, f), 'utf8');
+const tsx = readdirSync(DIR).filter((f) => f.endsWith('.tsx'));
+
+/** owns a `<Modal>`, so it owns a backdrop and can get the order wrong */
+const overlays = tsx.filter((f) => src(f).includes('<Modal'));
+/** anything a user can DISMISS — including the cards that borrow AnchoredCard's
+ *  backdrop rather than rendering their own. Coverage is about what a thumb can
+ *  touch, not about which file happens to contain the word "Modal". */
+const dismissible = tsx.filter((f) => src(f).includes('<Modal') || src(f).includes('AnchoredCard'));
 
 /** strip comments — this file's own rule is quoted in most of them */
 const code = (s: string) =>
@@ -38,23 +44,25 @@ const code = (s: string) =>
     .replace(/^\s*\/\/.*$/gm, '');
 
 describe('sheet contract: a tappable panel is never under its own backdrop', () => {
-  it('finds the overlays (a refactor must not silently empty this suite)', () => {
-    expect(overlays.length).toBeGreaterThanOrEqual(4);
-    // the two that shipped the bug must be in scope, however they're built today
-    const src = overlays.map((f) => readFileSync(join(DIR, f), 'utf8')).join('\n');
-    expect(src).toMatch(/backdrop/);
+  it('still covers every dismissible surface (a refactor must not empty this suite)', () => {
+    // Deliberately counts DISMISSIBLE, not <Modal>. Moving the sheets onto a
+    // shared AnchoredCard is exactly the kind of change that would have shrunk a
+    // <Modal>-based count while leaving coverage intact — and a guard that cries
+    // wolf at a healthy refactor is a guard people delete.
+    expect(dismissible.length).toBeGreaterThanOrEqual(5);
+    expect(overlays.length).toBeGreaterThanOrEqual(1);
   });
 
   it.each(overlays)('%s renders its backdrop BEFORE the panel', (file) => {
-    const src = code(readFileSync(join(DIR, file), 'utf8'));
+    const body = code(src(file));
 
-    const backdrop = src.indexOf('styles.backdrop');
+    const backdrop = body.indexOf('styles.backdrop');
     if (backdrop === -1) return; // delegates its backdrop to AnchoredCard
 
     // the panel is whatever the overlay actually draws: a Glass card, or the
     // animated wrapper holding one
     const panel = Math.min(
-      ...[src.indexOf('<Glass'), src.indexOf('<Animated.View')].filter((i) => i > -1)
+      ...[body.indexOf('<Glass'), body.indexOf('<Animated.View')].filter((i) => i > -1)
     );
     expect(panel).toBeGreaterThan(-1);
 
@@ -64,17 +72,13 @@ describe('sheet contract: a tappable panel is never under its own backdrop', () 
   });
 
   it.each(overlays)('%s gives its backdrop the whole modal to catch taps in', (file) => {
-    const src = readFileSync(join(DIR, file), 'utf8');
-    if (!src.includes('styles.backdrop')) return;
-    expect(src).toMatch(/backdrop:\s*\{\s*flex:\s*1/);
+    if (!src(file).includes('styles.backdrop')) return;
+    expect(src(file)).toMatch(/backdrop:\s*\{\s*flex:\s*1/);
   });
 
-  it('every overlay HAS a backdrop — its own, or AnchoredCard’s', () => {
-    for (const file of overlays) {
-      const src = readFileSync(join(DIR, file), 'utf8');
-      const own = src.includes('styles.backdrop');
-      const borrowed = src.includes('AnchoredCard');
-      expect(own || borrowed).toBe(true); // otherwise there's no way to dismiss it
-    }
+  it.each(dismissible)('%s HAS a backdrop — its own, or AnchoredCard’s', (file) => {
+    const own = src(file).includes('styles.backdrop');
+    const borrowed = src(file).includes('AnchoredCard');
+    expect(own || borrowed).toBe(true); // otherwise there is no way to dismiss it
   });
 });
